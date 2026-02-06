@@ -39,6 +39,7 @@ $routes = [
     'GET' => [
         '/' => [HomeController::class, 'index'],
         '/auth' => [AuthController::class, 'showPhone'],
+        '/menu' => [HomeController::class, 'menu'],
         '/auth/verify' => [AuthController::class, 'showVerify'],
         '/logout' => [AuthController::class, 'logout'],
 
@@ -62,6 +63,7 @@ $routes = [
         '/admin/locations' => [AdminController::class, 'locations'],
         '/admin/promocodes' => [AdminController::class, 'promocodes'],
         '/admin/missions' => [AdminController::class, 'missions'],
+        '/admin/menu' => [AdminController::class, 'menu'],
         '/admin/push' => [AdminController::class, 'push'],
         '/admin/data' => [AdminController::class, 'data'],
         '/admin/exports' => [AdminController::class, 'exports'],
@@ -85,6 +87,7 @@ $routes = [
         '/admin/locations' => [AdminController::class, 'locations'],
         '/admin/promocodes' => [AdminController::class, 'promocodes'],
         '/admin/missions' => [AdminController::class, 'missions'],
+        '/admin/menu' => [AdminController::class, 'menu'],
         '/admin/push' => [AdminController::class, 'push'],
         '/admin/data/save' => [AdminController::class, 'dataSave'],
 

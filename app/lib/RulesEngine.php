@@ -17,12 +17,17 @@ class RulesEngine {
             'double_stamps_days' => Settings::get('double_stamps_days', ['Fri', 'Sat']),
         ];
 
-        $stamps = $settings['stamps_rule_mode'] === 'per_amount'
-            ? (int)floor($total / max(1, $settings['stamps_per_amount_step']))
-            : $settings['stamps_per_order'];
+        $manualStamps = array_key_exists('stamps', $orderInput) ? max(0, (int)$orderInput['stamps']) : null;
+        if ($manualStamps !== null) {
+            $stamps = $manualStamps;
+        } else {
+            $stamps = $settings['stamps_rule_mode'] === 'per_amount'
+                ? (int)floor($total / max(1, $settings['stamps_per_amount_step']))
+                : $settings['stamps_per_order'];
 
-        if (in_array($weekday, (array)$settings['double_stamps_days'], true)) {
-            $stamps *= 2;
+            if (in_array($weekday, (array)$settings['double_stamps_days'], true)) {
+                $stamps *= 2;
+            }
         }
 
         $cashbackEarn = round(($total * $settings['cashback_percent']) / 100, 2);

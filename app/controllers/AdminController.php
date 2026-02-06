@@ -128,23 +128,27 @@ class AdminController {
             if ($title && $body) {
                 $pdo = Db::pdo();
                 $pdo->beginTransaction();
-                $pdo->prepare('INSERT INTO push_campaigns(title, body, url, created_by_user_id, created_at) VALUES(?,?,?,?,NOW())')
-                    ->execute([$title, $body, $url, (int)Auth::user()['id']]);
+                $pdo->prepare('INSERT INTO push_campaigns(title, body, url, target_role, created_by_user_id, created_at) VALUES(?,?,?,?,?,NOW())')
+                    ->execute([$title, $body, $url, $audience, (int)Auth::user()['id']]);
+                $campaignId = (int)$pdo->lastInsertId();
 
-                $sql = 'INSERT INTO user_notifications(user_id,title,body,url,is_read,created_at) SELECT id,?,?,?,0,NOW() FROM users';
-                $params = [$title, $body, $url];
+                $sql = 'INSERT INTO user_notifications(campaign_id,user_id,title,body,url,is_read,created_at) SELECT ?,id,?,?,?,0,NOW() FROM users';
+                $params = [$campaignId, $title, $body, $url];
                 if ($audience !== 'all') {
                     $sql .= ' WHERE role=?';
                     $params[] = $audience;
                 }
-                $pdo->prepare($sql)->execute($params);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $recipients = (int)$stmt->rowCount();
+                $pdo->prepare('UPDATE push_campaigns SET recipients_count=? WHERE id=?')->execute([$recipients, $campaignId]);
 
-                Audit::log((int)Auth::user()['id'], 'push_send', 'push_campaign', null, 'ok', 'audience=' . $audience . '; title=' . $title);
+                Audit::log((int)Auth::user()['id'], 'push_send', 'push_campaign', $campaignId, 'ok', 'audience=' . $audience . '; recipients=' . $recipients . '; title=' . $title);
                 $pdo->commit();
             }
             redirect('/admin/push');
         }
-        $campaigns = Db::pdo()->query('SELECT * FROM push_campaigns ORDER BY id DESC LIMIT 50')->fetchAll();
+        $campaigns = Db::pdo()->query('SELECT c.*, COALESCE(SUM(CASE WHEN n.is_read=1 THEN 1 ELSE 0 END),0) AS read_count, COALESCE(COUNT(n.id),0) AS sent_count FROM push_campaigns c LEFT JOIN user_notifications n ON n.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC LIMIT 50')->fetchAll();
         $subs = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn();
         $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
         view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'audienceStats' => $audienceStats]);
@@ -251,6 +255,35 @@ class AdminController {
         }
 
         redirect('/admin/data?table=' . urlencode($table));
+    }
+
+
+    public function menu(): void {
+        Auth::requireRole(['manager', 'admin']);
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = (string)($_POST['action'] ?? 'create');
+            if ($action === 'toggle') {
+                Db::pdo()->prepare('UPDATE menu_items SET is_active=IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['item_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'delete') {
+                Db::pdo()->prepare('DELETE FROM menu_items WHERE id=?')->execute([(int)$_POST['item_id']]);
+                redirect('/admin/menu');
+            }
+            Db::pdo()->prepare('INSERT INTO menu_items(name,price,description,image_url,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+                ->execute([
+                    trim((string)$_POST['name']),
+                    (float)$_POST['price'],
+                    trim((string)($_POST['description'] ?? '')) ?: null,
+                    trim((string)($_POST['image_url'] ?? '')) ?: null,
+                    isset($_POST['is_active']) ? 1 : 0,
+                    (int)($_POST['sort_order'] ?? 100),
+                ]);
+            redirect('/admin/menu');
+        }
+        $items = Db::pdo()->query('SELECT * FROM menu_items ORDER BY sort_order ASC, id DESC')->fetchAll();
+        view('admin/menu', ['items' => $items]);
     }
 
     public function exports(): void {

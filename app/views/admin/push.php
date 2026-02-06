@@ -27,6 +27,6 @@
 <section class="card fade-in">
   <h3>Последние кампании</h3>
   <?php foreach($campaigns as $c): ?>
-    <div>#<?= (int)$c['id'] ?> · <strong><?= htmlspecialchars($c['title']) ?></strong> · <?= htmlspecialchars($c['body']) ?> · <?= htmlspecialchars($c['created_at']) ?></div>
+    <div>#<?= (int)$c['id'] ?> · <strong><?= htmlspecialchars($c['title']) ?></strong> · <?= htmlspecialchars($c['body']) ?> · <?= htmlspecialchars((string)($c['target_role'] ?? 'all')) ?> · отправлено: <?= (int)($c['sent_count'] ?? $c['recipients_count'] ?? 0) ?> · прочитано: <?= (int)($c['read_count'] ?? 0) ?> · <?= htmlspecialchars($c['created_at']) ?></div>
   <?php endforeach; ?>
 </section>

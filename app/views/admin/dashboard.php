@@ -16,6 +16,7 @@
     <a class="btn" href="/admin/locations">Локации</a>
     <a class="btn" href="/admin/promocodes">Промокоды</a>
     <a class="btn" href="/admin/missions">Миссии</a>
+    <a class="btn" href="/admin/menu">Меню</a>
     <a class="btn" href="/admin/push">Push</a>
     <a class="btn" href="/admin/data">Data manager</a>
     <a class="btn" href="/admin/exports">Отчёты</a>

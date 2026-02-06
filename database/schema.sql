@@ -212,6 +212,8 @@ CREATE TABLE IF NOT EXISTS push_campaigns (
   title VARCHAR(255) NOT NULL,
   body TEXT NOT NULL,
   url VARCHAR(255) NULL,
+  target_role ENUM('all','user','barista','manager','admin') NOT NULL DEFAULT 'all',
+  recipients_count INT NOT NULL DEFAULT 0,
   created_by_user_id BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL,
   CONSTRAINT fk_push_campaign_actor FOREIGN KEY (created_by_user_id) REFERENCES users(id)
@@ -219,6 +221,7 @@ CREATE TABLE IF NOT EXISTS push_campaigns (
 
 CREATE TABLE IF NOT EXISTS user_notifications (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  campaign_id BIGINT UNSIGNED NULL,
   user_id BIGINT UNSIGNED NOT NULL,
   title VARCHAR(255) NOT NULL,
   body TEXT NOT NULL,
@@ -226,7 +229,33 @@ CREATE TABLE IF NOT EXISTS user_notifications (
   is_read TINYINT(1) NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL,
   CONSTRAINT fk_user_notif_user FOREIGN KEY (user_id) REFERENCES users(id),
-  INDEX idx_user_notif_user_read(user_id, is_read, created_at)
+  CONSTRAINT fk_user_notif_campaign FOREIGN KEY (campaign_id) REFERENCES push_campaigns(id),
+  INDEX idx_user_notif_user_read(user_id, is_read, created_at),
+  INDEX idx_user_notif_campaign(campaign_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE IF NOT EXISTS menu_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  description TEXT NULL,
+  image_url VARCHAR(500) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS qr_short_codes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(20) NOT NULL UNIQUE,
+  user_id BIGINT UNSIGNED NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  CONSTRAINT fk_qr_short_user FOREIGN KEY (user_id) REFERENCES users(id),
+  INDEX idx_qr_short_expires(expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

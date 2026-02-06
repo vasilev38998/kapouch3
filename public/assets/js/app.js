@@ -106,7 +106,12 @@ async function initPushNotifications() {
     try { await Notification.requestPermission(); } catch {}
   }
 
-  const endpoint = `web-${navigator.userAgent}-${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+    let deviceId = localStorage.getItem('push_device_id');
+  if (!deviceId) {
+    deviceId = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    localStorage.setItem('push_device_id', deviceId);
+  }
+  const endpoint = `web-${deviceId}`;
   try {
     await fetch('/api/push/subscribe', {
       method: 'POST',
@@ -134,11 +139,6 @@ async function initPushNotifications() {
             };
           }
           delivered.add(item.id);
-          fetch('/api/notifications/read', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: String(item.id) }).toString()
-          }).catch(() => {});
         }
       }
       localStorage.setItem('notified_ids', JSON.stringify(Array.from(delivered).slice(-200)));
@@ -158,7 +158,7 @@ async function initCameraScan() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     video.srcObject = stream;
     if (!('BarcodeDetector' in window)) {
-      if (status) status.textContent = 'Сканирование камерой недоступно: вставьте токен вручную.';
+      if (status) status.textContent = 'Сканирование камерой недоступно: введите короткий код вручную.';
       return;
     }
     const detector = new BarcodeDetector({ formats: ['qr_code'] });

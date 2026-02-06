@@ -38,6 +38,41 @@ class QrToken {
         return (int)$userId;
     }
 
+    public static function generateShortCode(int $userId): string {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $code = '';
+        for ($i = 0; $i < 8; $i++) {
+            $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+        $ttlMinutes = max(5, (int)config('app.qr_short_code_ttl_minutes', 120));
+        Db::pdo()->prepare('INSERT INTO qr_short_codes(code, user_id, expires_at, created_at) VALUES(?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE),NOW())')
+            ->execute([$code, $userId, $ttlMinutes]);
+        return $code;
+    }
+
+    public static function verifyFlexible(string $value): ?int {
+        $value = trim($value);
+        if ($value === '') return null;
+
+        $tokenUserId = self::verify($value);
+        if ($tokenUserId) return $tokenUserId;
+
+        if (preg_match('#/q/([A-Za-z0-9]+)$#', $value, $m)) {
+            $value = $m[1];
+        }
+
+        $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $value) ?? '');
+        if ($code === '') return null;
+
+        $stmt = Db::pdo()->prepare('SELECT id, user_id FROM qr_short_codes WHERE code=? AND expires_at >= NOW() AND used_at IS NULL ORDER BY id DESC LIMIT 1');
+        $stmt->execute([$code]);
+        $row = $stmt->fetch();
+        if (!$row) return null;
+
+        Db::pdo()->prepare('UPDATE qr_short_codes SET used_at=NOW() WHERE id=?')->execute([(int)$row['id']]);
+        return (int)$row['user_id'];
+    }
+
     private static function b64url(string $bin): string {
         return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
     }

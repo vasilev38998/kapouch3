@@ -42,7 +42,7 @@ class StaffController {
         Auth::requireRole(['barista', 'manager', 'admin']);
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
-            $userId = QrToken::verify((string)($_POST['token'] ?? ''));
+            $userId = QrToken::verifyFlexible((string)($_POST['token'] ?? '')); 
             if (!$userId) exit('Невалидный QR');
             redirect('/staff/order/create?user_id=' . $userId);
         }
@@ -66,6 +66,7 @@ class StaffController {
                 'total_amount' => (float)$_POST['total_amount'],
                 'cashback_spend' => (float)($_POST['cashback_spend'] ?? 0),
                 'promocode' => $_POST['promocode'] ?? null,
+                'stamps' => (int)($_POST['stamps'] ?? 1),
                 'idempotency_key' => $_POST['idempotency_key'] ?? null,
                 'meta' => [
                     'category' => $_POST['category'] ?? '',

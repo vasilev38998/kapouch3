@@ -5,6 +5,7 @@
   <p>Фирменная программа лояльности: штампы, кэшбэк, награды, рефералы и акции.</p>
   <div class="row">
     <a class="btn pulse" href="<?= $user ? '/profile' : '/auth' ?>"><?= $user ? 'Открыть кабинет' : 'Войти по телефону' ?></a>
+    <a class="btn ghost" href="/menu">Меню</a>
     <a class="btn ghost" href="/profile/invite">Реферальная программа</a>
   </div>
 </section>

@@ -64,8 +64,10 @@ class ProfileController {
 
     public function qr(): void {
         Auth::requireAuth();
-        $token = QrToken::generate((int)Auth::user()['id']);
-        view('profile/qr', ['token' => $token]);
+        $userId = (int)Auth::user()['id'];
+        $token = QrToken::generate($userId);
+        $shortCode = QrToken::generateShortCode($userId);
+        view('profile/qr', ['token' => $token, 'shortCode' => $shortCode]);
     }
 
 

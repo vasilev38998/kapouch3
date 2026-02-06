@@ -13,6 +13,7 @@
 <header class="topbar fade-in">
   <a class="brand" href="/"><img src="/assets/icons/kapouch-logo.svg" alt="Kapouch" class="brand-logo"></a>
   <nav class="topnav">
+    <a href="/menu">Меню</a>
     <?php if ($u): ?>
       <a href="/profile">Кабинет</a>
       <?php if (in_array($u['role'], ['barista','manager','admin'], true)): ?><a href="/staff">Staff</a><?php endif; ?>
