@@ -16,6 +16,12 @@ return [
         'password' => 'db_password',
         'charset' => 'utf8mb4',
     ],
+
+    'web_push' => [
+        'public_key' => '',
+        'private_key' => '',
+        'subject' => 'mailto:admin@example.com',
+    ],
     'sms_ru' => [
         'api_id' => 'sms_ru_api_id',
         'from' => 'Coffee',

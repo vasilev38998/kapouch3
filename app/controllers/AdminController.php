@@ -10,6 +10,7 @@ use App\Lib\Csrf;
 use App\Lib\CsvExport;
 use App\Lib\Db;
 use App\Lib\Settings;
+use App\Lib\WebPushService;
 use PDO;
 
 class AdminController {
@@ -29,6 +30,7 @@ class AdminController {
             'push_clicks_7d' => (int)$pdo->query('SELECT COALESCE(SUM(clicks_count),0) FROM push_campaigns WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)')->fetchColumn(),
             'unread_notifs' => (int)$pdo->query('SELECT COUNT(*) FROM user_notifications WHERE is_read=0')->fetchColumn(),
             'menu_sold_out' => (int)$pdo->query('SELECT COUNT(*) FROM menu_items WHERE is_active=1 AND is_sold_out=1')->fetchColumn(),
+            'push_granted_subs' => (int)$pdo->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='granted' AND is_active=1")->fetchColumn(),
         ];
         $recentUsers = $pdo->query('SELECT id,phone,role,created_at FROM users ORDER BY id DESC LIMIT 8')->fetchAll();
         view('admin/dashboard', ['stats' => $stats, 'health' => $health, 'recentUsers' => $recentUsers]);
@@ -174,7 +176,8 @@ class AdminController {
         $subsGranted = (int)Db::pdo()->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='granted'")->fetchColumn();
         $subsDenied = (int)Db::pdo()->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='denied'")->fetchColumn();
         $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
-        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'subscriptionsActive15m' => $subsActive15m, 'subscriptionsGranted' => $subsGranted, 'subscriptionsDenied' => $subsDenied, 'audienceStats' => $audienceStats, 'templates' => $templates]);
+        $webPushAvailable = (new WebPushService())->isAvailable();
+        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'subscriptionsActive15m' => $subsActive15m, 'subscriptionsGranted' => $subsGranted, 'subscriptionsDenied' => $subsDenied, 'webPushAvailable' => $webPushAvailable, 'audienceStats' => $audienceStats, 'templates' => $templates]);
     }
 
     private function dispatchScheduledCampaigns(): void {
@@ -194,13 +197,41 @@ class AdminController {
 
         $sql = 'INSERT INTO user_notifications(campaign_id,user_id,title,body,url,is_read,created_at) SELECT ?,id,?,?,?,0,NOW() FROM users';
         $params = [$campaignId, $c['title'], $c['body'], $c['url']];
-        if (($c['target_role'] ?? 'all') !== 'all') {
+        $roleFilter = (string)($c['target_role'] ?? 'all');
+        if ($roleFilter !== 'all') {
             $sql .= ' WHERE role=?';
-            $params[] = $c['target_role'];
+            $params[] = $roleFilter;
         }
         $ins = Db::pdo()->prepare($sql);
         $ins->execute($params);
-        return (int)$ins->rowCount();
+        $rowsInserted = (int)$ins->rowCount();
+
+        $subSql = "SELECT s.id, s.endpoint, s.p256dh, s.auth, s.content_encoding, s.user_id FROM push_subscriptions s INNER JOIN users u ON u.id=s.user_id WHERE s.is_active=1 AND s.permission='granted' AND s.endpoint IS NOT NULL";
+        $subParams = [];
+        if ($roleFilter !== 'all') {
+            $subSql .= ' AND u.role=?';
+            $subParams[] = $roleFilter;
+        }
+        $subStmt = Db::pdo()->prepare($subSql);
+        $subStmt->execute($subParams);
+        $subs = $subStmt->fetchAll();
+
+        $webPush = new WebPushService();
+        if (!empty($subs)) {
+            $result = $webPush->sendToSubscriptions($subs, [
+                'title' => (string)$c['title'],
+                'body' => (string)$c['body'],
+                'url' => (string)($c['url'] ?? '/profile'),
+                'campaignId' => (int)$campaignId,
+            ]);
+            if (($result['failed'] ?? 0) > 0 && !$webPush->isAvailable()) {
+                Db::pdo()->prepare("UPDATE push_subscriptions SET last_error=? WHERE permission='granted'")->execute(['web-push dependency or VAPID keys are missing']);
+            } elseif (($result['sent'] ?? 0) > 0) {
+                Db::pdo()->prepare("UPDATE push_subscriptions SET last_success_at=NOW(), last_error=NULL WHERE permission='granted'")->execute();
+            }
+        }
+
+        return $rowsInserted;
     }
 
     public function data(): void {

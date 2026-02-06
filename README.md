@@ -122,3 +122,19 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 - хранение `endpoint/p256dh/auth` ключей подписки,
 - отправка через web-push библиотеку на сервере,
 - `push` и `notificationclick` обработчики в service worker.
+
+
+## Внедрение полноценного Web Push (реализовано в коде)
+1. Установите зависимости:
+   - `composer install`
+2. Сгенерируйте VAPID ключи (например утилитой web-push):
+   - Public key
+   - Private key
+3. Заполните в `config.php` блок:
+   - `web_push.public_key`
+   - `web_push.private_key`
+   - `web_push.subject`
+4. Обязательно HTTPS на проде.
+5. Обновите БД по `database/schema.sql` (новые поля в `push_subscriptions`).
+
+После этого клиент подписывается через `PushManager`, сервер отправляет через библиотеку `minishlink/web-push`, а `service-worker.js` обрабатывает `push` и `notificationclick`.

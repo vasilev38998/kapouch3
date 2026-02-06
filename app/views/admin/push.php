@@ -8,6 +8,7 @@
     <?php endforeach; ?>
   </div>
   <p class="muted">Поддерживаются мгновенные и отложенные кампании, плюс шаблоны.</p>
+  <div class="chip">Web Push backend: <?= !empty($webPushAvailable) ? 'готов' : 'не настроен' ?></div>
   <div class="row" style="margin-top:6px">
     <div class="chip">Активные за 15 мин: <?= (int)($subscriptionsActive15m ?? 0) ?></div>
     <div class="chip">Разрешили уведомления: <?= (int)($subscriptionsGranted ?? 0) ?></div>

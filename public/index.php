@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../app/lib/helpers.php';
+$vendorAutoload = __DIR__ . '/../vendor/autoload.php';
+if (file_exists($vendorAutoload)) require $vendorAutoload;
 
 date_default_timezone_set(config('app.timezone', 'Europe/Moscow'));
 

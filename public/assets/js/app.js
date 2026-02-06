@@ -116,19 +116,57 @@ async function initPushNotifications() {
     try { await Notification.requestPermission(); } catch {}
   }
 
+    const publicKey = window.WEB_PUSH_PUBLIC_KEY || '';
+  const hasPushManager = ('serviceWorker' in navigator) && ('PushManager' in window) && publicKey;
+
+  const subscribeFallback = async () => {
     let deviceId = localStorage.getItem('push_device_id');
-  if (!deviceId) {
-    deviceId = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    localStorage.setItem('push_device_id', deviceId);
-  }
-  const endpoint = `web-${deviceId}`;
-  try {
+    if (!deviceId) {
+      deviceId = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      localStorage.setItem('push_device_id', deviceId);
+    }
     await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, endpoint, permission: Notification.permission }).toString()
+      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, endpoint: `fallback-${deviceId}`, permission: Notification.permission }).toString()
     });
-  } catch {}
+  };
+
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  };
+
+  try {
+    if (hasPushManager) {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub && Notification.permission === 'granted') {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+      }
+      if (sub) {
+        const json = sub.toJSON();
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ _csrf: window.CSRF_TOKEN, permission: Notification.permission, ...json })
+        });
+      } else {
+        await subscribeFallback();
+      }
+    } else {
+      await subscribeFallback();
+    }
+  } catch {
+    try { await subscribeFallback(); } catch {}
+  }
 
   const delivered = new Set(JSON.parse(localStorage.getItem('notified_ids') || '[]'));
   const poll = async () => {

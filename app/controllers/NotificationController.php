@@ -11,19 +11,35 @@ use App\Lib\Db;
 class NotificationController {
     public function subscribe(): void {
         Auth::requireAuth();
-        if (!Csrf::verify($_POST['_csrf'] ?? null)) {
+
+        $payload = $_POST;
+        if (empty($payload)) {
+            $raw = file_get_contents('php://input') ?: '';
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) $payload = $decoded;
+        }
+
+        if (!Csrf::verify($payload['_csrf'] ?? null)) {
             http_response_code(419);
             exit('CSRF');
         }
-        $endpoint = trim((string)($_POST['endpoint'] ?? ''));
-        $permission = (string)($_POST['permission'] ?? 'default');
+
+        $endpoint = trim((string)($payload['endpoint'] ?? ''));
+        $permission = (string)($payload['permission'] ?? 'default');
         if (!in_array($permission, ['default','granted','denied'], true)) $permission = 'default';
         if ($endpoint === '') {
             http_response_code(400);
             exit('bad endpoint');
         }
-        Db::pdo()->prepare('INSERT INTO push_subscriptions(user_id, endpoint, user_agent, permission, created_at, last_seen_at) VALUES(?,?,?,?,NOW(),NOW()) ON DUPLICATE KEY UPDATE user_agent=VALUES(user_agent), permission=VALUES(permission), last_seen_at=NOW()')
-            ->execute([(int)Auth::user()['id'], $endpoint, substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255), $permission]);
+
+        $keys = is_array($payload['keys'] ?? null) ? $payload['keys'] : [];
+        $p256dh = trim((string)($keys['p256dh'] ?? ($payload['p256dh'] ?? '')));
+        $auth = trim((string)($keys['auth'] ?? ($payload['auth'] ?? '')));
+        $encoding = trim((string)($payload['contentEncoding'] ?? ($payload['content_encoding'] ?? '')));
+
+        Db::pdo()->prepare('INSERT INTO push_subscriptions(user_id, endpoint, p256dh, auth, content_encoding, user_agent, permission, is_active, created_at, last_seen_at, last_error) VALUES(?,?,?,?,?,?,?,1,NOW(),NOW(),NULL) ON DUPLICATE KEY UPDATE p256dh=VALUES(p256dh), auth=VALUES(auth), content_encoding=VALUES(content_encoding), user_agent=VALUES(user_agent), permission=VALUES(permission), is_active=1, last_seen_at=NOW(), last_error=NULL')
+            ->execute([(int)Auth::user()['id'], $endpoint, $p256dh ?: null, $auth ?: null, $encoding ?: null, substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255), $permission]);
+
         header('Content-Type: application/json');
         echo json_encode(['ok' => true]);
     }
