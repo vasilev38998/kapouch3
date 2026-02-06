@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 180" role="img" aria-label="KAPOUCH">
+  <g fill="none" stroke="#4a2d25" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 25h140l20 22H120z"/>
+    <rect x="85" y="45" width="250" height="22" rx="11"/>
+    <path d="M95 67l18 90h194l18-90"/>
+    <ellipse cx="210" cy="104" rx="35" ry="28"/>
+    <path d="M220 82c10 20-12 24-14 43"/>
+  </g>
+  <text x="350" y="95" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="48" fill="#4a2d25">KAPOUCH</text>
+  <text x="350" y="130" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#4a2d25">кофе с собой</text>
+</svg>
