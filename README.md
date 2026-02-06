@@ -138,3 +138,17 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 5. Обновите БД по `database/schema.sql` (новые поля в `push_subscriptions`).
 
 После этого клиент подписывается через `PushManager`, сервер отправляет через библиотеку `minishlink/web-push`, а `service-worker.js` обрабатывает `push` и `notificationclick`.
+
+### Пример для обычного хостинга Beget (shared)
+1. Включите SSH-доступ в панели Beget и подключитесь:
+   - `ssh <user>@<server>`
+2. Перейдите в папку сайта (обычно `~/sites/<domain>/` или `~/www/<domain>/`).
+3. Установите зависимости:
+   - Если Composer доступен: `composer install --no-dev --optimize-autoloader`
+   - Если Composer нет, установите локально и запустите:
+     - `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`
+     - `php composer-setup.php`
+     - `php -r "unlink('composer-setup.php');"`
+     - `php composer.phar install --no-dev --optimize-autoloader`
+4. Убедитесь, что веб-корень направлен в папку `public/` (в панели Beget это «корневая папка сайта»).  
+   Если изменить корень нельзя, перенесите содержимое `public/` в корневую папку сайта.
