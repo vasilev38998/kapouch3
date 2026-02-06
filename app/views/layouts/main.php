@@ -4,14 +4,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#3b2a1f">
+  <meta name="theme-color" content="#ffd42a">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/assets/css/app.css">
-  <title><?= htmlspecialchars(config('app.name', 'Coffee Loyalty')) ?></title>
+  <title><?= htmlspecialchars(config('app.name', 'KAPOUCH Loyalty')) ?></title>
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">☕ <?= htmlspecialchars(config('app.name', 'Coffee Loyalty')) ?></a>
+  <a class="brand" href="/">
+    <img src="/assets/icons/kapouch-logo.svg" alt="Kapouch" class="brand-logo">
+  </a>
   <nav class="topnav">
     <?php if ($u): ?>
       <a href="/profile">Кабинет</a>
@@ -23,7 +25,7 @@
   </nav>
 </header>
 <main class="container"><?php require $templatePath; ?></main>
-<button id="installBtn" class="install-btn" hidden>Установить приложение</button>
+<button id="installBtn" class="install-btn" hidden>Установить Kapouch App</button>
 <script>window.CSRF_TOKEN='<?= Csrf::token() ?>';window.APP_BASE='<?= htmlspecialchars(rtrim((string)config('app.base_url',''), '/')) ?>';</script>
 <script src="/assets/js/app.js"></script>
 </body>
