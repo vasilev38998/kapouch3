@@ -47,4 +47,15 @@ class NotificationController {
         header('Content-Type: application/json');
         echo json_encode(['ok' => true]);
     }
+
+    public function readAll(): void {
+        Auth::requireAuth();
+        if (!Csrf::verify($_POST['_csrf'] ?? null)) {
+            http_response_code(419);
+            exit('CSRF');
+        }
+        Db::pdo()->prepare('UPDATE user_notifications SET is_read=1 WHERE user_id=?')->execute([(int)Auth::user()['id']]);
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true]);
+    }
 }

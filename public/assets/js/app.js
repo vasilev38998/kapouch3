@@ -40,7 +40,20 @@ function showInAppFeed(messages = []) {
 
   if (list.length) {
     feed.hidden = false;
-    feed.innerHTML = '<h3>Лента</h3>' + list.map((m) => `<div>${m}</div>`).join('');
+    const uniq = Array.from(new Set(list)).slice(0, 8);
+    const markAll = '<button id="feedMarkRead" class="btn ghost" style="margin:8px 0">Отметить уведомления прочитанными</button>';
+    feed.innerHTML = '<h3>Лента</h3>' + markAll + uniq.map((m) => `<div>${m}</div>`).join('');
+    const btn = document.getElementById('feedMarkRead');
+    btn?.addEventListener('click', () => {
+      fetch('/api/notifications/read-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ _csrf: window.CSRF_TOKEN }).toString()
+      }).then(() => {
+        btn.textContent = 'Готово ✅';
+        btn.disabled = true;
+      }).catch(() => {});
+    });
   }
   localStorage.setItem('feed_seen', '1');
 }
@@ -110,9 +123,16 @@ async function initPushNotifications() {
       const data = await res.json();
       const feedMessages = [];
       for (const item of (data.items || [])) {
-        feedMessages.push(`🔔 ${item.title}: ${item.body}`);
+        const msg = item.url ? `🔔 <a href="${item.url}">${item.title}</a>: ${item.body}` : `🔔 ${item.title}: ${item.body}`;
+        feedMessages.push(msg);
         if (!delivered.has(item.id) && Notification.permission === 'granted') {
-          new Notification(item.title, { body: item.body });
+          const note = new Notification(item.title, { body: item.body });
+          if (item.url) {
+            note.onclick = () => {
+              window.focus();
+              window.location.href = item.url;
+            };
+          }
           delivered.add(item.id);
           fetch('/api/notifications/read', {
             method: 'POST',

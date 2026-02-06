@@ -90,6 +90,7 @@ $routes = [
 
         '/api/push/subscribe' => [NotificationController::class, 'subscribe'],
         '/api/notifications/read' => [NotificationController::class, 'read'],
+        '/api/notifications/read-all' => [NotificationController::class, 'readAll'],
     ],
 ];
 

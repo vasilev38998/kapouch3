@@ -115,25 +115,39 @@ class AdminController {
 
     public function push(): void {
         Auth::requireRole(['manager', 'admin']);
+        $allowedAudience = ['all', 'user', 'barista', 'manager', 'admin'];
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
             $title = trim((string)($_POST['title'] ?? ''));
             $body = trim((string)($_POST['body'] ?? ''));
             $url = trim((string)($_POST['url'] ?? '/profile')) ?: '/profile';
+            $audience = (string)($_POST['audience'] ?? 'all');
+            if (!in_array($audience, $allowedAudience, true)) {
+                $audience = 'all';
+            }
             if ($title && $body) {
                 $pdo = Db::pdo();
                 $pdo->beginTransaction();
                 $pdo->prepare('INSERT INTO push_campaigns(title, body, url, created_by_user_id, created_at) VALUES(?,?,?,?,NOW())')
                     ->execute([$title, $body, $url, (int)Auth::user()['id']]);
-                $pdo->prepare('INSERT INTO user_notifications(user_id,title,body,url,is_read,created_at) SELECT id,?,?,?,0,NOW() FROM users')
-                    ->execute([$title, $body, $url]);
+
+                $sql = 'INSERT INTO user_notifications(user_id,title,body,url,is_read,created_at) SELECT id,?,?,?,0,NOW() FROM users';
+                $params = [$title, $body, $url];
+                if ($audience !== 'all') {
+                    $sql .= ' WHERE role=?';
+                    $params[] = $audience;
+                }
+                $pdo->prepare($sql)->execute($params);
+
+                Audit::log((int)Auth::user()['id'], 'push_send', 'push_campaign', null, 'ok', 'audience=' . $audience . '; title=' . $title);
                 $pdo->commit();
             }
             redirect('/admin/push');
         }
         $campaigns = Db::pdo()->query('SELECT * FROM push_campaigns ORDER BY id DESC LIMIT 50')->fetchAll();
         $subs = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn();
-        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs]);
+        $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
+        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'audienceStats' => $audienceStats]);
     }
 
     public function data(): void {
@@ -142,13 +156,50 @@ class AdminController {
         $table = $_GET['table'] ?? ($tables[0] ?? 'users');
         $this->assertAllowedTable($table, $tables);
 
+        $search = trim((string)($_GET['q'] ?? ''));
+        $limit = (int)($_GET['limit'] ?? 200);
+        if ($limit < 20) $limit = 20;
+        if ($limit > 500) $limit = 500;
+
         $pdo = Db::pdo();
         $columns = $pdo->query('SHOW COLUMNS FROM `' . $table . '`')->fetchAll();
-        $rows = $pdo->query('SELECT * FROM `' . $table . '` ORDER BY 1 DESC LIMIT 200')->fetchAll();
+        $rows = [];
+
+        $textColumns = [];
+        foreach ($columns as $column) {
+            $type = strtolower((string)($column['Type'] ?? ''));
+            if (str_contains($type, 'char') || str_contains($type, 'text') || str_contains($type, 'json')) {
+                $textColumns[] = (string)$column['Field'];
+            }
+        }
+
+        if ($search !== '' && $textColumns) {
+            $where = implode(' OR ', array_map(fn($c) => '`' . $c . '` LIKE ?', $textColumns));
+            $sql = 'SELECT * FROM `' . $table . '` WHERE ' . $where . ' ORDER BY 1 DESC LIMIT ' . $limit;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_fill(0, count($textColumns), '%' . $search . '%'));
+            $rows = $stmt->fetchAll();
+        } else {
+            $rows = $pdo->query('SELECT * FROM `' . $table . '` ORDER BY 1 DESC LIMIT ' . $limit)->fetchAll();
+        }
+
+        if (($_GET['export'] ?? '') === 'csv') {
+            CsvExport::output($table . '.csv', array_column($columns, 'Field'), $rows);
+        }
+
         $pk = null;
         foreach ($columns as $c) if (($c['Key'] ?? '') === 'PRI') { $pk = $c['Field']; break; }
 
-        view('admin/data', ['tables' => $tables, 'table' => $table, 'columns' => $columns, 'rows' => $rows, 'pk' => $pk]);
+        view('admin/data', [
+            'tables' => $tables,
+            'table' => $table,
+            'columns' => $columns,
+            'rows' => $rows,
+            'pk' => $pk,
+            'search' => $search,
+            'limit' => $limit,
+            'supportsSearch' => !empty($textColumns),
+        ]);
     }
 
     public function dataSave(): void {

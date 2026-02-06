@@ -6,8 +6,16 @@
         <?php foreach($tables as $t): ?><option value="<?= htmlspecialchars($t) ?>" <?= $table===$t?'selected':'' ?>><?= htmlspecialchars($t) ?></option><?php endforeach; ?>
       </select>
     </label>
+    <label style="flex:1">Поиск
+      <input name="q" value="<?= htmlspecialchars((string)($search ?? '')) ?>" placeholder="часть текста">
+    </label>
+    <label>Лимит
+      <input name="limit" type="number" min="20" max="500" value="<?= (int)($limit ?? 200) ?>" style="width:110px">
+    </label>
     <button class="btn">Открыть</button>
+    <a class="btn ghost" href="/admin/data?table=<?= urlencode($table) ?>&q=<?= urlencode((string)($search ?? '')) ?>&limit=<?= (int)($limit ?? 200) ?>&export=csv">CSV</a>
   </form>
+  <?php if(!($supportsSearch ?? false)): ?><p class="muted">Для этой таблицы поиск по тексту не доступен.</p><?php endif; ?>
 </section>
 
 <section class="card fade-in">
@@ -25,7 +33,7 @@
 </section>
 
 <section class="card fade-in" style="overflow:auto">
-  <h3>Записи: <?= htmlspecialchars($table) ?></h3>
+  <h3>Записи: <?= htmlspecialchars($table) ?> <small class="muted">(<?= count($rows) ?>)</small></h3>
   <table style="width:100%;border-collapse:collapse;font-size:14px">
     <thead>
       <tr><?php foreach($columns as $c): ?><th style="text-align:left;border-bottom:1px solid #e4be5f;padding:6px"><?= htmlspecialchars($c['Field']) ?></th><?php endforeach; ?><th></th></tr>

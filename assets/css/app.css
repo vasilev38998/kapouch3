@@ -26,3 +26,5 @@ video#scanVideo{width:100%;border-radius:12px;border:2px solid var(--line);backg
 @keyframes fadeIn{to{opacity:1;transform:none}}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+
+.chip{display:inline-block;background:#fff7df;border:1px solid #e4be5f;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:700}
