@@ -1,6 +1,5 @@
 <section class="hero card fade-in">
-  <div class="hero-logo-wrap"><img src="/assets/icons/kapouch-logo.svg" alt="Kapouch logo" class="hero-logo"></div>
-  <h1>Kapouch</h1>
+  <h1>KAPOUCH/</h1>
   <p class="muted">Кофе с собой · Шелехов, Култукский тракт 25/1</p>
   <p>Фирменная программа лояльности: штампы, кэшбэк, награды, рефералы и акции.</p>
   <div class="row">

@@ -1,11 +1,10 @@
-<h2>Скан QR</h2>
+<h2>Начисление штампов по короткому коду</h2>
 <div class="card">
-  <p>Камера: авто-декод через BarcodeDetector (если поддерживается). Иначе введите короткий код вручную (или полный токен как резерв).</p>
+  <p>Введите 5-значный код клиента. Код обновляется каждые 5–7 минут.</p>
   <form method="post" id="scanForm">
     <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
-    <textarea name="token" id="scanToken" required placeholder="Например: A1B2C3D4"></textarea>
-    <button class="btn">Проверить</button>
+    <input name="token" id="scanToken" required maxlength="5" inputmode="numeric" pattern="\d{5}" placeholder="Например: 48392">
+    <button class="btn">Найти клиента</button>
   </form>
-  <video id="scanVideo" autoplay playsinline></video>
   <div id="scanStatus" class="muted"></div>
 </div>

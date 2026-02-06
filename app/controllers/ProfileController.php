@@ -27,14 +27,16 @@ class ProfileController {
 
         $orders = $pdo->prepare('SELECT id,total_amount,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
         $orders->execute([$user['id']]);
+        $statusMap = ['created' => 'создан', 'reversed' => 'отменён (реверс)', 'cancelled' => 'отменён'];
         foreach ($orders->fetchAll() as $row) {
-            $history[] = ['kind' => 'order', 'title' => 'Заказ #' . $row['id'], 'value' => $row['total_amount'] . ' ₽', 'meta' => $row['status'], 'created_at' => $row['created_at']];
+            $history[] = ['kind' => 'order', 'title' => 'Заказ #' . $row['id'], 'value' => $row['total_amount'] . ' ₽', 'meta' => ($statusMap[$row['status']] ?? (string)$row['status']), 'created_at' => $row['created_at']];
         }
 
         $cb = $pdo->prepare('SELECT id,type,amount,created_at FROM cashback_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
         $cb->execute([$user['id']]);
+        $cbTypeMap = ['earn' => 'начисление', 'spend' => 'списание', 'adjust' => 'корректировка', 'reversal' => 'реверс'];
         foreach ($cb->fetchAll() as $row) {
-            $history[] = ['kind' => 'cashback', 'title' => 'Cashback ' . $row['type'], 'value' => $row['amount'], 'meta' => 'ledger#' . $row['id'], 'created_at' => $row['created_at']];
+            $history[] = ['kind' => 'cashback', 'title' => 'Кэшбэк: ' . ($cbTypeMap[$row['type']] ?? (string)$row['type']), 'value' => $row['amount'], 'meta' => 'операция #' . $row['id'], 'created_at' => $row['created_at']];
         }
 
         $st = $pdo->prepare('SELECT id,delta,reason,created_at FROM stamp_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
@@ -65,9 +67,8 @@ class ProfileController {
     public function qr(): void {
         Auth::requireAuth();
         $userId = (int)Auth::user()['id'];
-        $token = QrToken::generate($userId);
         $shortCode = QrToken::generateShortCode($userId);
-        view('profile/qr', ['token' => $token, 'shortCode' => $shortCode]);
+        view('profile/qr', ['shortCode' => $shortCode]);
     }
 
 

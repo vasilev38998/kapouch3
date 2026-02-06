@@ -10,7 +10,7 @@
   <div class="stamps"><?php for($i=1;$i<=6;$i++): ?><span class="dot <?= $i <= (int)$loyalty['stamps'] ? 'filled':'' ?>"></span><?php endfor; ?></div>
   <?php if ((int)$loyalty['reward_available'] === 1): ?><div class="ok">Награда доступна 🎁</div><?php endif; ?>
   <div class="row">
-    <a class="btn" href="/profile/qr">Мой QR</a>
+    <a class="btn" href="/profile/qr">Код для штампов</a>
     <a class="btn ghost" href="/profile/invite">Пригласить друга</a>
     <?php if (in_array($user['role'], ['barista','manager','admin'], true)): ?><a class="btn ghost" href="/staff">Staff</a><?php endif; ?>
     <?php if (in_array($user['role'], ['manager','admin'], true)): ?><a class="btn ghost" href="/admin">Админка</a><?php endif; ?>

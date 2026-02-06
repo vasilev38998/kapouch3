@@ -11,7 +11,7 @@
 </head>
 <body>
 <header class="topbar fade-in">
-  <a class="brand" href="/"><img src="/assets/icons/kapouch-logo.svg" alt="Kapouch" class="brand-logo"></a>
+  <a class="brand" href="/">KAPOUCH/</a>
   <nav class="topnav">
     <a href="/menu">Меню</a>
     <?php if ($u): ?>
