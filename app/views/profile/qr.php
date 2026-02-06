@@ -1,7 +1,10 @@
-<h2>Мой QR-токен</h2>
+<h2>Мой QR-код</h2>
 <div class="card">
-  <p>Токен для сканирования:</p>
-  <div class="qr-mock" aria-label="QR token visual"><?= htmlspecialchars(substr(hash('sha256', $token), 0, 36)) ?></div>
+  <p>Покажите QR бариста для быстрого поиска в системе.</p>
+  <div class="qr-wrap">
+    <img class="qr-img" alt="User QR" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=<?= rawurlencode($token) ?>">
+  </div>
+  <label>Токен (резервный вариант)</label>
   <textarea rows="4" readonly><?= htmlspecialchars($token) ?></textarea>
-  <p class="muted">В staff-сканере поддержан camera decode через BarcodeDetector (если доступно), иначе вставка токена вручную.</p>
+  <button class="btn" type="button" data-copy-target="textarea">Копировать токен</button>
 </div>

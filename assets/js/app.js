@@ -22,18 +22,28 @@ function showInAppFeed() {
   const feed = document.getElementById('inAppFeed');
   if (!widget || !feed) return;
   const messages = [];
-  if (widget.getAttribute('data-reward-available') === '1') {
-    messages.push('🎁 У вас доступна награда: можно списать бесплатный кофе.');
-  }
-  const lastSeen = localStorage.getItem('feed_last_seen');
-  if (!lastSeen) {
-    messages.push('📲 Добавьте приложение на домашний экран для быстрого доступа.');
-  }
+  if (widget.getAttribute('data-reward-available') === '1') messages.push('🎁 У вас доступна награда — можно списать бесплатный кофе.');
+  if (!localStorage.getItem('feed_seen')) messages.push('📲 Закрепите приложение на главном экране для быстрого доступа.');
   if (messages.length) {
     feed.hidden = false;
-    feed.innerHTML = '<h3>Уведомления</h3>' + messages.map((m) => `<div>${m}</div>`).join('');
+    feed.innerHTML = '<h3>Лента</h3>' + messages.map((m) => `<div>${m}</div>`).join('');
   }
-  localStorage.setItem('feed_last_seen', new Date().toISOString());
+  localStorage.setItem('feed_seen', '1');
+}
+
+function initCopyButtons() {
+  document.querySelectorAll('[data-copy-target]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const selector = btn.getAttribute('data-copy-target');
+      const target = btn.closest('.card')?.querySelector(selector) || document.querySelector(selector);
+      const val = target?.value || target?.textContent || '';
+      if (!val) return;
+      await navigator.clipboard.writeText(val);
+      const old = btn.textContent;
+      btn.textContent = 'Скопировано ✅';
+      setTimeout(() => (btn.textContent = old), 1500);
+    });
+  });
 }
 
 async function initCameraScan() {
@@ -45,14 +55,13 @@ async function initCameraScan() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     video.srcObject = stream;
     if (!('BarcodeDetector' in window)) {
-      if (status) status.textContent = 'BarcodeDetector не поддерживается: используйте вставку токена вручную.';
+      if (status) status.textContent = 'Сканирование камерой недоступно: вставьте токен вручную.';
       return;
     }
 
     const detector = new BarcodeDetector({ formats: ['qr_code'] });
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-
     const tick = async () => {
       if (!video.videoWidth || !video.videoHeight) return requestAnimationFrame(tick);
       canvas.width = video.videoWidth;
@@ -61,19 +70,19 @@ async function initCameraScan() {
       const codes = await detector.detect(canvas).catch(() => []);
       if (codes.length && codes[0].rawValue) {
         tokenInput.value = codes[0].rawValue;
-        if (status) status.textContent = 'QR распознан, отправляем...';
+        status && (status.textContent = 'QR распознан, отправляем...');
         document.getElementById('scanForm')?.submit();
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
       requestAnimationFrame(tick);
     };
-
     requestAnimationFrame(tick);
   } catch (e) {
-    if (status) status.textContent = 'Камера недоступна: ' + (e?.message || e);
+    status && (status.textContent = 'Камера недоступна');
   }
 }
 
 showInAppFeed();
+initCopyButtons();
 initCameraScan();

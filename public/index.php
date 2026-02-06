@@ -42,6 +42,7 @@ $routes = [
         '/logout' => [AuthController::class, 'logout'],
         '/profile' => [ProfileController::class, 'index'],
         '/profile/qr' => [ProfileController::class, 'qr'],
+        '/profile/invite' => [ProfileController::class, 'invite'],
         '/profile/phone-change' => [ProfileController::class, 'phoneChange'],
         '/profile/birthday' => [ProfileController::class, 'birthday'],
         '/history' => [ProfileController::class, 'history'],

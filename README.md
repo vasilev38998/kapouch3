@@ -35,7 +35,7 @@ PWA-приложение для кофейни: loyalty (штампы), cashback
 
 ## Базовые URL
 - Публичные: `/`, `/auth`, `/auth/verify`, `/r/{refcode}`, `/logout`
-- Пользователь: `/profile`, `/profile/qr`, `/profile/phone-change`, `/profile/birthday`, `/history`
+- Пользователь: `/profile`, `/profile/qr`, `/profile/invite`, `/profile/phone-change`, `/profile/birthday`, `/history`
 - Staff: `/staff`, `/staff/user/search`, `/staff/scan`, `/staff/order/create`, `/staff/order/{id}`, `/staff/order/{id}/reverse`, `/staff/promocodes`, `/staff/missions`, `/staff/reward/redeem`
 - Admin: `/admin/settings`, `/admin/users`, `/admin/locations`, `/admin/promocodes`, `/admin/missions`, `/admin/exports`, `/admin/audit`
 
@@ -69,3 +69,9 @@ PWA-приложение для кофейни: loyalty (штампы), cashback
 - Admin CRUD-экраны для промокодов и миссий.
 - Опциональная одноразовость QR (через `features.qr_nonce_single_use` + `qr_nonces`).
 - In-app уведомления в профиле и camera QR decode через BarcodeDetector (где поддерживается).
+
+
+## UX-обновление
+- Переработан мобильный дизайн интерфейса (карточки, CTA, типографика).
+- `Пригласить друга` ведёт на отдельную страницу `/profile/invite` с share-ссылкой и QR.
+- `Мой QR` отображается в виде QR-изображения + есть fallback токен.

@@ -68,6 +68,15 @@ class ProfileController {
         view('profile/qr', ['token' => $token]);
     }
 
+
+    public function invite(): void {
+        Auth::requireAuth();
+        $user = Auth::user();
+        $base = rtrim((string)config('app.base_url', ''), '/');
+        $inviteLink = ($base ?: '') . '/r/' . $user['ref_code'];
+        view('profile/invite', ['user' => $user, 'inviteLink' => $inviteLink]);
+    }
+
     public function phoneChange(): void {
         Auth::requireAuth();
         if (!method_is('POST')) {
