@@ -10,7 +10,8 @@ PWA-приложение для кофейни: loyalty (штампы), cashback
 - PWA: `manifest.json`, `service-worker.js`, offline fallback
 
 ## Структура
-- `public/` — front controller + assets + PWA files
+- `public/` — исходная web-папка (сохранена для совместимости)
+- `index.php` (в корне) — точка входа для хостинга
 - `app/controllers/` — контроллеры
 - `app/lib/` — сервисы (RulesEngine, Ledger, FraudGuard, QrToken, SmsRuClient, etc.)
 - `app/views/` — шаблоны
@@ -21,11 +22,16 @@ PWA-приложение для кофейни: loyalty (штампы), cashback
 1. Создайте БД и пользователя в панели Beget.
 2. Импортируйте `database/schema.sql`.
 3. Скопируйте `config.php.example` в `config.php`, заполните DB/sms.ru/app secret.
-4. В Beget выставьте корень сайта на `/public`.
+4. Корень сайта оставьте на корне проекта (требование хостинга), т.к. `index.php` лежит в корне.
 5. Убедитесь, что `storage/logs/app.log` доступен на запись.
 6. Создайте admin:
    - зарегистрируйте пользователя через OTP,
    - затем SQL: `UPDATE users SET role='admin' WHERE phone='+7XXXXXXXXXX';`
+
+## Важно для хостинга
+- Точка входа: корневой `index.php`.
+- Статические файлы доступны из корня: `/assets`, `/manifest.json`, `/service-worker.js`.
+- Для Apache добавлен `.htaccess` с rewrite в `index.php`.
 
 ## Базовые URL
 - Публичные: `/`, `/auth`, `/auth/verify`, `/r/{refcode}`, `/logout`
