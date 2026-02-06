@@ -1,0 +1,38 @@
+<?php
+return [
+    'app' => [
+        'name' => 'Kapouch',
+        'base_url' => 'https://example.com',
+        'secret' => 'change_me_super_secret',
+        'qr_ttl_days' => 30,
+        'timezone' => 'Europe/Moscow',
+    ],
+    'db' => [
+        'host' => 'localhost',
+        'port' => 3306,
+        'database' => 'coffee_loyalty',
+        'username' => 'db_user',
+        'password' => 'db_password',
+        'charset' => 'utf8mb4',
+    ],
+    'sms_ru' => [
+        'api_id' => 'sms_ru_api_id',
+        'from' => 'Coffee',
+        'test' => true,
+    ],
+    'review_links' => [
+        '2gis_url' => 'https://2gis.ru/',
+        'yandex_url' => 'https://yandex.ru/maps/',
+    ],
+    'otp' => [
+        'ttl_minutes' => 5,
+        'cooldown_sec' => 60,
+        'sms_per_day' => 5,
+        'attempts' => 3,
+    ],
+    'features' => [
+        'preorder' => false,
+        'qr_nonce_single_use' => false,
+        'locations_enabled' => true,
+    ],
+];
