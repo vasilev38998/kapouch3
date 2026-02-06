@@ -56,7 +56,17 @@ function showInAppFeed(messages = []) {
     });
   }
   localStorage.setItem('feed_seen', '1');
+  feed.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-notif-id]');
+    if (!a) return;
+    fetch('/api/notifications/click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: a.getAttribute('data-notif-id') || '' }).toString()
+    }).catch(() => {});
+  });
 }
+
 
 function initCopyButtons() {
   document.querySelectorAll('[data-copy-target]').forEach((btn) => {
@@ -128,13 +138,18 @@ async function initPushNotifications() {
       const data = await res.json();
       const feedMessages = [];
       for (const item of (data.items || [])) {
-        const msg = item.url ? `🔔 <a href="${item.url}">${item.title}</a>: ${item.body}` : `🔔 ${item.title}: ${item.body}`;
+        const msg = item.url ? `🔔 <a data-notif-id="${item.id}" href="${item.url}">${item.title}</a>: ${item.body}` : `🔔 ${item.title}: ${item.body}`;
         feedMessages.push(msg);
         if (!delivered.has(item.id) && Notification.permission === 'granted') {
           const note = new Notification(item.title, { body: item.body });
           if (item.url) {
             note.onclick = () => {
               window.focus();
+              fetch('/api/notifications/click', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: String(item.id) }).toString()
+              }).catch(() => {});
               window.location.href = item.url;
             };
           }

@@ -48,6 +48,25 @@ class NotificationController {
         echo json_encode(['ok' => true]);
     }
 
+    public function click(): void {
+        Auth::requireAuth();
+        if (!Csrf::verify($_POST['_csrf'] ?? null)) {
+            http_response_code(419);
+            exit('CSRF');
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $stmt = Db::pdo()->prepare('SELECT campaign_id FROM user_notifications WHERE id=? AND user_id=? LIMIT 1');
+            $stmt->execute([$id, (int)Auth::user()['id']]);
+            $campaignId = (int)$stmt->fetchColumn();
+            if ($campaignId > 0) {
+                Db::pdo()->prepare('UPDATE push_campaigns SET clicks_count=clicks_count+1 WHERE id=?')->execute([$campaignId]);
+            }
+        }
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true]);
+    }
+
     public function readAll(): void {
         Auth::requireAuth();
         if (!Csrf::verify($_POST['_csrf'] ?? null)) {

@@ -9,6 +9,16 @@
   <div><small>Кэшбэк 30д</small><strong><?= number_format((float)$stats['cashback_30d'],2,'.',' ') ?> ₽</strong></div>
   <div><small>Списано наград</small><strong><?= (int)$stats['rewards_30d'] ?></strong></div>
 </section>
+
+<section class="card kpi-grid fade-in">
+  <div><small>OTP за 24ч</small><strong><?= (int)($health['otp_24h'] ?? 0) ?></strong></div>
+  <div><small>OTP ошибок 24ч</small><strong><?= (int)($health['otp_fail_24h'] ?? 0) ?></strong></div>
+  <div><small>Push кампаний 7д</small><strong><?= (int)($health['push_sent_7d'] ?? 0) ?></strong></div>
+  <div><small>Push кликов 7д</small><strong><?= (int)($health['push_clicks_7d'] ?? 0) ?></strong></div>
+  <div><small>Непрочитанных уведомлений</small><strong><?= (int)($health['unread_notifs'] ?? 0) ?></strong></div>
+  <div><small>Позиции в стоп-листе</small><strong><?= (int)($health['menu_sold_out'] ?? 0) ?></strong></div>
+</section>
+
 <section class="card fade-in">
   <div class="row">
     <a class="btn" href="/admin/settings">Настройки</a>

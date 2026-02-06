@@ -22,8 +22,16 @@ class AdminController {
             'cashback_30d' => (float)$pdo->query("SELECT COALESCE(SUM(amount),0) FROM cashback_ledger WHERE type='earn' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
             'rewards_30d' => (int)$pdo->query("SELECT COUNT(*) FROM rewards WHERE status='redeemed' AND redeemed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
         ];
+        $health = [
+            'otp_24h' => (int)$pdo->query('SELECT COUNT(*) FROM otp_requests WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)')->fetchColumn(),
+            'otp_fail_24h' => (int)$pdo->query("SELECT COUNT(*) FROM otp_requests WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sms_status IS NOT NULL AND sms_status NOT IN ('ok','OK')")->fetchColumn(),
+            'push_sent_7d' => (int)$pdo->query("SELECT COUNT(*) FROM push_campaigns WHERE (sent_at IS NOT NULL AND sent_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) OR (sent_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))")->fetchColumn(),
+            'push_clicks_7d' => (int)$pdo->query('SELECT COALESCE(SUM(clicks_count),0) FROM push_campaigns WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)')->fetchColumn(),
+            'unread_notifs' => (int)$pdo->query('SELECT COUNT(*) FROM user_notifications WHERE is_read=0')->fetchColumn(),
+            'menu_sold_out' => (int)$pdo->query('SELECT COUNT(*) FROM menu_items WHERE is_active=1 AND is_sold_out=1')->fetchColumn(),
+        ];
         $recentUsers = $pdo->query('SELECT id,phone,role,created_at FROM users ORDER BY id DESC LIMIT 8')->fetchAll();
-        view('admin/dashboard', ['stats' => $stats, 'recentUsers' => $recentUsers]);
+        view('admin/dashboard', ['stats' => $stats, 'health' => $health, 'recentUsers' => $recentUsers]);
     }
 
     public function settings(): void {
@@ -116,42 +124,80 @@ class AdminController {
     public function push(): void {
         Auth::requireRole(['manager', 'admin']);
         $allowedAudience = ['all', 'user', 'barista', 'manager', 'admin'];
+
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = (string)($_POST['action'] ?? 'send');
+            if ($action === 'dispatch_due') {
+                $this->dispatchScheduledCampaigns();
+                redirect('/admin/push');
+            }
+            if ($action === 'template_create') {
+                Db::pdo()->prepare('INSERT INTO push_templates(name,title,body,url,is_active,created_at) VALUES(?,?,?,?,1,NOW())')
+                    ->execute([
+                        trim((string)($_POST['template_name'] ?? '')) ?: 'Шаблон',
+                        trim((string)($_POST['template_title'] ?? '')),
+                        trim((string)($_POST['template_body'] ?? '')),
+                        trim((string)($_POST['template_url'] ?? '/profile')) ?: '/profile',
+                    ]);
+                redirect('/admin/push');
+            }
+
             $title = trim((string)($_POST['title'] ?? ''));
             $body = trim((string)($_POST['body'] ?? ''));
             $url = trim((string)($_POST['url'] ?? '/profile')) ?: '/profile';
             $audience = (string)($_POST['audience'] ?? 'all');
-            if (!in_array($audience, $allowedAudience, true)) {
-                $audience = 'all';
-            }
+            $scheduleAt = trim((string)($_POST['schedule_at'] ?? ''));
+            if (!in_array($audience, $allowedAudience, true)) $audience = 'all';
+
             if ($title && $body) {
-                $pdo = Db::pdo();
-                $pdo->beginTransaction();
-                $pdo->prepare('INSERT INTO push_campaigns(title, body, url, target_role, created_by_user_id, created_at) VALUES(?,?,?,?,?,NOW())')
-                    ->execute([$title, $body, $url, $audience, (int)Auth::user()['id']]);
-                $campaignId = (int)$pdo->lastInsertId();
-
-                $sql = 'INSERT INTO user_notifications(campaign_id,user_id,title,body,url,is_read,created_at) SELECT ?,id,?,?,?,0,NOW() FROM users';
-                $params = [$campaignId, $title, $body, $url];
-                if ($audience !== 'all') {
-                    $sql .= ' WHERE role=?';
-                    $params[] = $audience;
+                $status = $scheduleAt !== '' ? 'scheduled' : 'sent';
+                $sentAt = $scheduleAt !== '' ? null : now();
+                $scheduledFor = $scheduleAt !== '' ? date('Y-m-d H:i:s', strtotime($scheduleAt)) : null;
+                Db::pdo()->prepare('INSERT INTO push_campaigns(title, body, url, target_role, recipients_count, clicks_count, status, scheduled_for, sent_at, created_by_user_id, created_at) VALUES(?,?,?,?,0,0,?,?,?,?,NOW())')
+                    ->execute([$title, $body, $url, $audience, $status, $scheduledFor, $sentAt, (int)Auth::user()['id']]);
+                $campaignId = (int)Db::pdo()->lastInsertId();
+                if ($status === 'sent') {
+                    $recipients = $this->dispatchCampaign($campaignId);
+                    Db::pdo()->prepare('UPDATE push_campaigns SET recipients_count=? WHERE id=?')->execute([$recipients, $campaignId]);
                 }
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute($params);
-                $recipients = (int)$stmt->rowCount();
-                $pdo->prepare('UPDATE push_campaigns SET recipients_count=? WHERE id=?')->execute([$recipients, $campaignId]);
-
-                Audit::log((int)Auth::user()['id'], 'push_send', 'push_campaign', $campaignId, 'ok', 'audience=' . $audience . '; recipients=' . $recipients . '; title=' . $title);
-                $pdo->commit();
+                Audit::log((int)Auth::user()['id'], 'push_send', 'push_campaign', $campaignId, 'ok', 'audience=' . $audience . '; status=' . $status);
             }
             redirect('/admin/push');
         }
-        $campaigns = Db::pdo()->query('SELECT c.*, COALESCE(SUM(CASE WHEN n.is_read=1 THEN 1 ELSE 0 END),0) AS read_count, COALESCE(COUNT(n.id),0) AS sent_count FROM push_campaigns c LEFT JOIN user_notifications n ON n.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC LIMIT 50')->fetchAll();
+
+        $this->dispatchScheduledCampaigns();
+        $campaigns = Db::pdo()->query("SELECT c.*, COALESCE(SUM(CASE WHEN n.is_read=1 THEN 1 ELSE 0 END),0) AS read_count, COALESCE(COUNT(n.id),0) AS sent_count FROM push_campaigns c LEFT JOIN user_notifications n ON n.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC LIMIT 80")->fetchAll();
+        $templates = Db::pdo()->query('SELECT * FROM push_templates WHERE is_active=1 ORDER BY id DESC LIMIT 30')->fetchAll();
         $subs = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn();
         $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
-        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'audienceStats' => $audienceStats]);
+        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'audienceStats' => $audienceStats, 'templates' => $templates]);
+    }
+
+    private function dispatchScheduledCampaigns(): void {
+        $rows = Db::pdo()->query("SELECT id FROM push_campaigns WHERE status='scheduled' AND scheduled_for IS NOT NULL AND scheduled_for <= NOW() ORDER BY id ASC LIMIT 20")->fetchAll();
+        foreach ($rows as $row) {
+            $campaignId = (int)$row['id'];
+            $recipients = $this->dispatchCampaign($campaignId);
+            Db::pdo()->prepare("UPDATE push_campaigns SET status='sent', sent_at=NOW(), recipients_count=? WHERE id=?")->execute([$recipients, $campaignId]);
+        }
+    }
+
+    private function dispatchCampaign(int $campaignId): int {
+        $stmt = Db::pdo()->prepare('SELECT id,title,body,url,target_role FROM push_campaigns WHERE id=? LIMIT 1');
+        $stmt->execute([$campaignId]);
+        $c = $stmt->fetch();
+        if (!$c) return 0;
+
+        $sql = 'INSERT INTO user_notifications(campaign_id,user_id,title,body,url,is_read,created_at) SELECT ?,id,?,?,?,0,NOW() FROM users';
+        $params = [$campaignId, $c['title'], $c['body'], $c['url']];
+        if (($c['target_role'] ?? 'all') !== 'all') {
+            $sql .= ' WHERE role=?';
+            $params[] = $c['target_role'];
+        }
+        $ins = Db::pdo()->prepare($sql);
+        $ins->execute($params);
+        return (int)$ins->rowCount();
     }
 
     public function data(): void {
@@ -257,32 +303,37 @@ class AdminController {
         redirect('/admin/data?table=' . urlencode($table));
     }
 
-
     public function menu(): void {
         Auth::requireRole(['manager', 'admin']);
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
             $action = (string)($_POST['action'] ?? 'create');
             if ($action === 'toggle') {
-                Db::pdo()->prepare('UPDATE menu_items SET is_active=IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['item_id']]);
+                Db::pdo()->prepare('UPDATE menu_items SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'sold_out') {
+                Db::pdo()->prepare('UPDATE menu_items SET is_sold_out=IF(is_sold_out=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
                 redirect('/admin/menu');
             }
             if ($action === 'delete') {
                 Db::pdo()->prepare('DELETE FROM menu_items WHERE id=?')->execute([(int)$_POST['item_id']]);
                 redirect('/admin/menu');
             }
-            Db::pdo()->prepare('INSERT INTO menu_items(name,price,description,image_url,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+            Db::pdo()->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
                 ->execute([
                     trim((string)$_POST['name']),
+                    trim((string)($_POST['category'] ?? 'Напитки')) ?: 'Напитки',
                     (float)$_POST['price'],
                     trim((string)($_POST['description'] ?? '')) ?: null,
                     trim((string)($_POST['image_url'] ?? '')) ?: null,
                     isset($_POST['is_active']) ? 1 : 0,
+                    isset($_POST['is_sold_out']) ? 1 : 0,
                     (int)($_POST['sort_order'] ?? 100),
                 ]);
             redirect('/admin/menu');
         }
-        $items = Db::pdo()->query('SELECT * FROM menu_items ORDER BY sort_order ASC, id DESC')->fetchAll();
+        $items = Db::pdo()->query('SELECT * FROM menu_items ORDER BY category ASC, sort_order ASC, id DESC')->fetchAll();
         view('admin/menu', ['items' => $items]);
     }
 

@@ -14,7 +14,7 @@ class HomeController {
     public function menu(): void {
         $items = [];
         try {
-            $items = \App\Lib\Db::pdo()->query('SELECT id,name,price,description,image_url FROM menu_items WHERE is_active=1 ORDER BY sort_order ASC, id DESC')->fetchAll();
+            $items = \App\Lib\Db::pdo()->query("SELECT id,name,category,price,description,image_url,is_sold_out FROM menu_items WHERE is_active=1 ORDER BY category ASC, sort_order ASC, id DESC")->fetchAll();
         } catch (\Throwable) {
             $items = [];
         }
