@@ -196,4 +196,37 @@ CREATE TABLE IF NOT EXISTS qr_nonces (
   CONSTRAINT fk_qr_nonce_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  endpoint VARCHAR(255) NOT NULL UNIQUE,
+  user_agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL,
+  CONSTRAINT fk_push_sub_user FOREIGN KEY (user_id) REFERENCES users(id),
+  INDEX idx_push_sub_user(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS push_campaigns (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  url VARCHAR(255) NULL,
+  created_by_user_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  CONSTRAINT fk_push_campaign_actor FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_notifications (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  url VARCHAR(255) NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  CONSTRAINT fk_user_notif_user FOREIGN KEY (user_id) REFERENCES users(id),
+  INDEX idx_user_notif_user_read(user_id, is_read, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;

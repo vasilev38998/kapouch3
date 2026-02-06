@@ -27,6 +27,7 @@ session_start();
 use App\Controllers\AdminController;
 use App\Controllers\AuthController;
 use App\Controllers\HomeController;
+use App\Controllers\NotificationController;
 use App\Controllers\ProfileController;
 use App\Controllers\ReferralController;
 use App\Controllers\StaffController;
@@ -40,41 +41,55 @@ $routes = [
         '/auth' => [AuthController::class, 'showPhone'],
         '/auth/verify' => [AuthController::class, 'showVerify'],
         '/logout' => [AuthController::class, 'logout'],
+
         '/profile' => [ProfileController::class, 'index'],
         '/profile/qr' => [ProfileController::class, 'qr'],
         '/profile/invite' => [ProfileController::class, 'invite'],
         '/profile/phone-change' => [ProfileController::class, 'phoneChange'],
         '/profile/birthday' => [ProfileController::class, 'birthday'],
         '/history' => [ProfileController::class, 'history'],
+
         '/staff' => [StaffController::class, 'dashboard'],
         '/staff/user/search' => [StaffController::class, 'userSearch'],
         '/staff/scan' => [StaffController::class, 'scan'],
         '/staff/order/create' => [StaffController::class, 'orderCreate'],
         '/staff/promocodes' => [StaffController::class, 'promocodes'],
         '/staff/missions' => [StaffController::class, 'missions'],
+
         '/admin' => [AdminController::class, 'dashboard'],
         '/admin/settings' => [AdminController::class, 'settings'],
         '/admin/users' => [AdminController::class, 'users'],
         '/admin/locations' => [AdminController::class, 'locations'],
         '/admin/promocodes' => [AdminController::class, 'promocodes'],
         '/admin/missions' => [AdminController::class, 'missions'],
+        '/admin/push' => [AdminController::class, 'push'],
+        '/admin/data' => [AdminController::class, 'data'],
         '/admin/exports' => [AdminController::class, 'exports'],
         '/admin/audit' => [AdminController::class, 'audit'],
+
+        '/api/notifications/poll' => [NotificationController::class, 'poll'],
     ],
     'POST' => [
         '/auth/send' => [AuthController::class, 'sendOtp'],
         '/auth/verify' => [AuthController::class, 'verifyOtp'],
+
         '/profile/phone-change' => [ProfileController::class, 'phoneChange'],
         '/profile/birthday' => [ProfileController::class, 'birthday'],
+
         '/staff/scan' => [StaffController::class, 'scan'],
         '/staff/order/create' => [StaffController::class, 'orderCreate'],
         '/staff/reward/redeem' => [StaffController::class, 'redeemReward'],
-        '/admin' => [AdminController::class, 'dashboard'],
+
         '/admin/settings' => [AdminController::class, 'settings'],
         '/admin/users' => [AdminController::class, 'users'],
         '/admin/locations' => [AdminController::class, 'locations'],
         '/admin/promocodes' => [AdminController::class, 'promocodes'],
         '/admin/missions' => [AdminController::class, 'missions'],
+        '/admin/push' => [AdminController::class, 'push'],
+        '/admin/data/save' => [AdminController::class, 'dataSave'],
+
+        '/api/push/subscribe' => [NotificationController::class, 'subscribe'],
+        '/api/notifications/read' => [NotificationController::class, 'read'],
     ],
 ];
 

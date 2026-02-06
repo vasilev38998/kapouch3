@@ -37,7 +37,7 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 - Публичные: `/`, `/auth`, `/auth/verify`, `/r/{refcode}`, `/logout`
 - Пользователь: `/profile`, `/profile/qr`, `/profile/invite`, `/profile/phone-change`, `/profile/birthday`, `/history`
 - Staff: `/staff`, `/staff/user/search`, `/staff/scan`, `/staff/order/create`, `/staff/order/{id}`, `/staff/order/{id}/reverse`, `/staff/promocodes`, `/staff/missions`, `/staff/reward/redeem`
-- Admin: `/admin/settings`, `/admin/users`, `/admin/locations`, `/admin/promocodes`, `/admin/missions`, `/admin/exports`, `/admin/audit`
+- Admin: `/admin`, `/admin/settings`, `/admin/users`, `/admin/locations`, `/admin/promocodes`, `/admin/missions`, `/admin/push`, `/admin/data`, `/admin/exports`, `/admin/audit`
 
 ## Тестовые сценарии
 1. **Регистрация/OTP**
@@ -80,3 +80,6 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 
 - Добавлен `/admin` дашборд с KPI, быстрыми ссылками и недавними пользователями.
 - В профиле и шапке есть переход в админку/стафф в зависимости от роли пользователя.
+
+- На экране входа добавлена маска телефона `+7 (___) ___-__-__`.
+- В админке добавлен раздел Push-рассылок (`/admin/push`) и универсальный менеджер данных (`/admin/data`) для редактирования таблиц.

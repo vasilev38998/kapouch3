@@ -29,16 +29,18 @@ function initAnimations() {
   document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
 }
 
-function showInAppFeed() {
+function showInAppFeed(messages = []) {
   const widget = document.querySelector('[data-reward-available]');
   const feed = document.getElementById('inAppFeed');
-  if (!widget || !feed) return;
-  const messages = [];
-  if (widget.getAttribute('data-reward-available') === '1') messages.push('🎁 У вас доступна награда — можно списать бесплатный кофе.');
-  if (!localStorage.getItem('feed_seen')) messages.push('📲 Закрепите приложение Kapouch на главном экране.');
-  if (messages.length) {
+  if (!feed) return;
+
+  const list = [...messages];
+  if (widget && widget.getAttribute('data-reward-available') === '1') list.push('🎁 У вас доступна награда — можно списать бесплатный кофе.');
+  if (!localStorage.getItem('feed_seen')) list.push('📲 Закрепите приложение Kapouch на главном экране.');
+
+  if (list.length) {
     feed.hidden = false;
-    feed.innerHTML = '<h3>Лента</h3>' + messages.map((m) => `<div>${m}</div>`).join('');
+    feed.innerHTML = '<h3>Лента</h3>' + list.map((m) => `<div>${m}</div>`).join('');
   }
   localStorage.setItem('feed_seen', '1');
 }
@@ -56,6 +58,75 @@ function initCopyButtons() {
       setTimeout(() => (btn.textContent = old), 1500);
     });
   });
+}
+
+function applyPhoneMask(value) {
+  const d = value.replace(/\D/g, '').replace(/^8/, '7');
+  const n = d.startsWith('7') ? d.slice(1, 11) : d.slice(0, 10);
+  const p1 = n.slice(0, 3);
+  const p2 = n.slice(3, 6);
+  const p3 = n.slice(6, 8);
+  const p4 = n.slice(8, 10);
+  let out = '+7';
+  if (p1) out += ` (${p1}`;
+  if (p1.length === 3) out += ')';
+  if (p2) out += ` ${p2}`;
+  if (p3) out += `-${p3}`;
+  if (p4) out += `-${p4}`;
+  return out;
+}
+
+function initPhoneMask() {
+  document.querySelectorAll('.js-phone').forEach((input) => {
+    input.addEventListener('input', () => {
+      input.value = applyPhoneMask(input.value);
+    });
+    if (input.value) input.value = applyPhoneMask(input.value);
+  });
+}
+
+async function initPushNotifications() {
+  const authPage = window.location.pathname.startsWith('/auth');
+  if (authPage || !('Notification' in window)) return;
+
+  if (Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch {}
+  }
+
+  const endpoint = `web-${navigator.userAgent}-${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+  try {
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, endpoint }).toString()
+    });
+  } catch {}
+
+  const delivered = new Set(JSON.parse(localStorage.getItem('notified_ids') || '[]'));
+  const poll = async () => {
+    try {
+      const res = await fetch('/api/notifications/poll', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const feedMessages = [];
+      for (const item of (data.items || [])) {
+        feedMessages.push(`🔔 ${item.title}: ${item.body}`);
+        if (!delivered.has(item.id) && Notification.permission === 'granted') {
+          new Notification(item.title, { body: item.body });
+          delivered.add(item.id);
+          fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: String(item.id) }).toString()
+          }).catch(() => {});
+        }
+      }
+      localStorage.setItem('notified_ids', JSON.stringify(Array.from(delivered).slice(-200)));
+      if (feedMessages.length) showInAppFeed(feedMessages.slice(0, 5));
+    } catch {}
+  };
+  poll();
+  setInterval(poll, 30000);
 }
 
 async function initCameraScan() {
@@ -97,4 +168,6 @@ async function initCameraScan() {
 initAnimations();
 showInAppFeed();
 initCopyButtons();
+initPhoneMask();
+initPushNotifications();
 initCameraScan();
