@@ -1,6 +1,7 @@
 <h2>Admin: Промокоды</h2>
-<form method="post" class="card">
+<form method="post" class="card fade-in">
   <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
+  <input type="hidden" name="action" value="create">
   <input name="code" placeholder="CODE" required>
   <select name="type">
     <?php foreach(['stamps','cashback_fixed','cashback_boost_percent','reward'] as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
@@ -16,4 +17,14 @@
   <textarea name="meta_json" placeholder='{"category":"coffee"}'></textarea>
   <button class="btn">Создать</button>
 </form>
-<div class="card"><?php foreach($rows as $r): ?><div>#<?= (int)$r['id'] ?> <?= htmlspecialchars($r['code']) ?> · <?= htmlspecialchars($r['type']) ?> · <?= htmlspecialchars((string)$r['value']) ?> · active=<?= (int)$r['is_active'] ?></div><?php endforeach; ?></div>
+<div class="card fade-in">
+  <?php foreach($rows as $r): ?>
+    <form method="post" class="row" style="justify-content:space-between;align-items:center;border-bottom:1px dashed #e4be5f;padding:8px 0">
+      <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
+      <input type="hidden" name="action" value="toggle">
+      <input type="hidden" name="promocode_id" value="<?= (int)$r['id'] ?>">
+      <div>#<?= (int)$r['id'] ?> <?= htmlspecialchars($r['code']) ?> · <?= htmlspecialchars($r['type']) ?> · <?= htmlspecialchars((string)$r['value']) ?> · active=<?= (int)$r['is_active'] ?></div>
+      <button class="btn ghost" type="submit">Переключить</button>
+    </form>
+  <?php endforeach; ?>
+</div>

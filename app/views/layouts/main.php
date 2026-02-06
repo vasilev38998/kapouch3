@@ -7,17 +7,16 @@
   <meta name="theme-color" content="#ffd42a">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/assets/css/app.css">
-  <title><?= htmlspecialchars(config('app.name', 'KAPOUCH Loyalty')) ?></title>
+  <title><?= htmlspecialchars(config('app.name', 'Kapouch')) ?></title>
 </head>
 <body>
-<header class="topbar">
-  <a class="brand" href="/">
-    <img src="/assets/icons/kapouch-logo.svg" alt="Kapouch" class="brand-logo">
-  </a>
+<header class="topbar fade-in">
+  <a class="brand" href="/"><img src="/assets/icons/kapouch-logo.svg" alt="Kapouch" class="brand-logo"></a>
   <nav class="topnav">
     <?php if ($u): ?>
       <a href="/profile">Кабинет</a>
-      <a href="/staff">Staff</a>
+      <?php if (in_array($u['role'], ['barista','manager','admin'], true)): ?><a href="/staff">Staff</a><?php endif; ?>
+      <?php if (in_array($u['role'], ['manager','admin'], true)): ?><a href="/admin">Админка</a><?php endif; ?>
       <a href="/logout">Выход</a>
     <?php else: ?>
       <a href="/auth">Вход</a>
@@ -25,6 +24,7 @@
   </nav>
 </header>
 <main class="container"><?php require $templatePath; ?></main>
+<footer class="footer fade-in">Kapouch · Шелехов, Култукский тракт 25/1</footer>
 <button id="installBtn" class="install-btn" hidden>Установить Kapouch App</button>
 <script>window.CSRF_TOKEN='<?= Csrf::token() ?>';window.APP_BASE='<?= htmlspecialchars(rtrim((string)config('app.base_url',''), '/')) ?>';</script>
 <script src="/assets/js/app.js"></script>

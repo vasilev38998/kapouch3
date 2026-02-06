@@ -12,6 +12,19 @@ use App\Lib\Db;
 use App\Lib\Settings;
 
 class AdminController {
+    public function dashboard(): void {
+        Auth::requireRole(['manager', 'admin']);
+        $pdo = Db::pdo();
+        $stats = [
+            'users_total' => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
+            'orders_30d' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)')->fetchColumn(),
+            'cashback_30d' => (float)$pdo->query("SELECT COALESCE(SUM(amount),0) FROM cashback_ledger WHERE type='earn' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+            'rewards_30d' => (int)$pdo->query("SELECT COUNT(*) FROM rewards WHERE status='redeemed' AND redeemed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+        ];
+        $recentUsers = $pdo->query('SELECT id,phone,role,created_at FROM users ORDER BY id DESC LIMIT 8')->fetchAll();
+        view('admin/dashboard', ['stats' => $stats, 'recentUsers' => $recentUsers]);
+    }
+
     public function settings(): void {
         Auth::requireRole(['admin']);
         if (method_is('POST')) {
@@ -36,7 +49,7 @@ class AdminController {
             Audit::log((int)Auth::user()['id'], 'role_update', 'user', (int)$_POST['user_id'], 'ok', 'role=' . $_POST['role']);
             redirect('/admin/users');
         }
-        $users = Db::pdo()->query('SELECT id, phone, role, ref_code, created_at FROM users ORDER BY id DESC LIMIT 200')->fetchAll();
+        $users = Db::pdo()->query('SELECT id, phone, role, ref_code, created_at FROM users ORDER BY id DESC LIMIT 300')->fetchAll();
         view('admin/users', ['users' => $users]);
     }
 
@@ -44,6 +57,10 @@ class AdminController {
         Auth::requireRole(['admin']);
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            if (($_POST['action'] ?? '') === 'toggle') {
+                Db::pdo()->prepare('UPDATE locations SET is_active = IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['location_id']]);
+                redirect('/admin/locations');
+            }
             Db::pdo()->prepare('INSERT INTO locations(name,address,`2gis_url`,yandex_url,is_active) VALUES(?,?,?,?,1)')
                 ->execute([$_POST['name'], $_POST['address'], $_POST['url2gis'], $_POST['urly']]);
             redirect('/admin/locations');
@@ -56,6 +73,11 @@ class AdminController {
         Auth::requireRole(['manager', 'admin']);
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = $_POST['action'] ?? 'create';
+            if ($action === 'toggle') {
+                Db::pdo()->prepare('UPDATE promocodes SET is_active=IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['promocode_id']]);
+                redirect('/admin/promocodes');
+            }
             Db::pdo()->prepare('INSERT INTO promocodes(code,type,value,starts_at,ends_at,max_uses_total,max_uses_per_user,min_order_amount,location_id,is_active,meta_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
                 ->execute([
                     strtoupper(trim((string)$_POST['code'])),
@@ -72,7 +94,7 @@ class AdminController {
                 ]);
             redirect('/admin/promocodes');
         }
-        $rows = Db::pdo()->query('SELECT * FROM promocodes ORDER BY id DESC LIMIT 200')->fetchAll();
+        $rows = Db::pdo()->query('SELECT * FROM promocodes ORDER BY id DESC LIMIT 300')->fetchAll();
         view('admin/promocodes', ['rows' => $rows]);
     }
 
@@ -80,6 +102,11 @@ class AdminController {
         Auth::requireRole(['manager', 'admin']);
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = $_POST['action'] ?? 'create';
+            if ($action === 'toggle') {
+                Db::pdo()->prepare('UPDATE missions SET is_active=IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['mission_id']]);
+                redirect('/admin/missions');
+            }
             Db::pdo()->prepare('INSERT INTO missions(name,type,config_json,reward_json,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?)')
                 ->execute([
                     $_POST['name'],
@@ -92,7 +119,7 @@ class AdminController {
                 ]);
             redirect('/admin/missions');
         }
-        $rows = Db::pdo()->query('SELECT * FROM missions ORDER BY id DESC LIMIT 200')->fetchAll();
+        $rows = Db::pdo()->query('SELECT * FROM missions ORDER BY id DESC LIMIT 300')->fetchAll();
         view('admin/missions', ['rows' => $rows]);
     }
 

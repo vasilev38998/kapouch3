@@ -1,7 +1,7 @@
 <?php
 return [
     'app' => [
-        'name' => 'Coffee Loyalty',
+        'name' => 'Kapouch',
         'base_url' => 'https://example.com',
         'secret' => 'change_me_super_secret',
         'qr_ttl_days' => 30,

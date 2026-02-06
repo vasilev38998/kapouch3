@@ -17,13 +17,25 @@ installBtn?.addEventListener('click', async () => {
   installBtn.hidden = true;
 });
 
+function initAnimations() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
+}
+
 function showInAppFeed() {
   const widget = document.querySelector('[data-reward-available]');
   const feed = document.getElementById('inAppFeed');
   if (!widget || !feed) return;
   const messages = [];
   if (widget.getAttribute('data-reward-available') === '1') messages.push('🎁 У вас доступна награда — можно списать бесплатный кофе.');
-  if (!localStorage.getItem('feed_seen')) messages.push('📲 Закрепите приложение на главном экране для быстрого доступа.');
+  if (!localStorage.getItem('feed_seen')) messages.push('📲 Закрепите приложение Kapouch на главном экране.');
   if (messages.length) {
     feed.hidden = false;
     feed.innerHTML = '<h3>Лента</h3>' + messages.map((m) => `<div>${m}</div>`).join('');
@@ -58,7 +70,6 @@ async function initCameraScan() {
       if (status) status.textContent = 'Сканирование камерой недоступно: вставьте токен вручную.';
       return;
     }
-
     const detector = new BarcodeDetector({ formats: ['qr_code'] });
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -78,11 +89,12 @@ async function initCameraScan() {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  } catch (e) {
+  } catch {
     status && (status.textContent = 'Камера недоступна');
   }
 }
 
+initAnimations();
 showInAppFeed();
 initCopyButtons();
 initCameraScan();
