@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Lib\Audit;
 use App\Lib\Auth;
 use App\Lib\Csrf;
 use App\Lib\Db;
@@ -32,12 +33,14 @@ class AuthController {
         $stmt->execute([$phone]);
         $last = $stmt->fetchColumn();
         if ($last && (time() - strtotime((string)$last)) < $cooldown) {
+            app_log('OTP cooldown hit phone=' . $phone);
             exit('Слишком часто. Подождите минуту.');
         }
 
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM otp_requests WHERE phone=? AND DATE(sent_at)=CURDATE()');
         $stmt->execute([$phone]);
         if ((int)$stmt->fetchColumn() >= $daily) {
+            app_log('OTP daily limit hit phone=' . $phone);
             exit('Лимит SMS в сутки исчерпан.');
         }
 
@@ -78,6 +81,7 @@ class AuthController {
         $hash = hash_hmac('sha256', $otp, config('app.secret'));
         if (!hash_equals($req['otp_hash'], $hash)) {
             $pdo->prepare('UPDATE otp_requests SET attempts_left = attempts_left - 1 WHERE id=?')->execute([$req['id']]);
+            Audit::log(null, 'otp_verify_failed', 'phone', null, 'error', $phone);
             exit('Неверный OTP');
         }
 
@@ -96,11 +100,14 @@ class AuthController {
         }
 
         Auth::login($userId);
+        Audit::log($userId, 'login', 'user', $userId, 'ok', 'otp');
         unset($_SESSION['otp_phone']);
         redirect('/profile');
     }
 
     public function logout(): void {
+        $u = Auth::user();
+        if ($u) Audit::log((int)$u['id'], 'logout', 'user', (int)$u['id'], 'ok');
         Auth::logout();
         redirect('/');
     }

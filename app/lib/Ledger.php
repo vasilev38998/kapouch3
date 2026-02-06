@@ -11,18 +11,27 @@ class Ledger {
         $pdo = Db::pdo();
         $engine = new RulesEngine();
         $calc = $engine->calculateOrder($payload);
+        $idempotencyKey = substr((string)($payload['idempotency_key'] ?? ''), 0, 64) ?: null;
+
+        if ($idempotencyKey) {
+            $stmt = $pdo->prepare('SELECT id FROM orders WHERE idempotency_key=? LIMIT 1');
+            $stmt->execute([$idempotencyKey]);
+            $existing = $stmt->fetchColumn();
+            if ($existing) return (int)$existing;
+        }
 
         FraudGuard::checkOrderLimits((int)$payload['user_id'], $calc['stamps'], $calc['cashback_earn'], (float)($payload['cashback_spend'] ?? 0));
 
         $pdo->beginTransaction();
         try {
-            $stmt = $pdo->prepare('INSERT INTO orders(user_id, staff_user_id, location_id, total_amount, status, meta_json, created_at) VALUES(?,?,?,?,\'created\',?,NOW())');
+            $stmt = $pdo->prepare('INSERT INTO orders(user_id, staff_user_id, location_id, total_amount, status, meta_json, idempotency_key, created_at) VALUES(?,?,?,?,\'created\',?,?,NOW())');
             $stmt->execute([
                 $payload['user_id'],
                 $payload['staff_user_id'],
                 $payload['location_id'] ?: null,
                 $payload['total_amount'],
                 json_encode($payload['meta'] ?? [], JSON_UNESCAPED_UNICODE),
+                $idempotencyKey,
             ]);
             $orderId = (int)$pdo->lastInsertId();
 
@@ -38,7 +47,7 @@ class Ledger {
             $this->addStamps((int)$payload['user_id'], $orderId, $calc['stamps'], 'order', (int)$payload['staff_user_id']);
             $this->applyPromocodeIfAny((int)$payload['user_id'], $orderId, $payload);
             $this->processReferral((int)$payload['user_id'], $orderId, (int)$payload['staff_user_id']);
-            $this->processMissions((int)$payload['user_id'], $orderId, $payload);
+            $this->processMissions((int)$payload['user_id'], $orderId);
             $this->processBirthdayBonus((int)$payload['user_id'], $orderId, (int)$payload['staff_user_id']);
             $this->syncLoyaltyState((int)$payload['user_id']);
             $pdo->commit();
@@ -103,6 +112,11 @@ class Ledger {
     }
 
     public function redeemFreeCoffee(int $userId, int $staffId): void {
+        $stateStmt = Db::pdo()->prepare('SELECT reward_available FROM loyalty_state WHERE user_id=?');
+        $stateStmt->execute([$userId]);
+        if ((int)$stateStmt->fetchColumn() !== 1) {
+            throw new RuntimeException('Reward unavailable');
+        }
         $required = (int)Settings::get('stamps_required_for_reward', 6);
         $this->addStamps($userId, null, -$required, 'free_coffee_redeem', $staffId);
         Db::pdo()->prepare("INSERT INTO rewards(user_id, type, value, status, meta_json, created_at, redeemed_at) VALUES(?, 'free_coffee', 0, 'redeemed', '{}', NOW(), NOW())")
@@ -172,7 +186,7 @@ class Ledger {
         }
     }
 
-    private function processMissions(int $userId, int $orderId, array $payload): void {
+    private function processMissions(int $userId, int $orderId): void {
         $pdo = Db::pdo();
         $missions = $pdo->query("SELECT * FROM missions WHERE is_active=1 AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>=NOW())")->fetchAll();
         foreach ($missions as $m) {

@@ -21,10 +21,20 @@ class QrToken {
         $expected = hash_hmac('sha256', $payload, config('app.secret'), true);
         if (!hash_equals($expected, $sig)) return null;
 
-        [$userId, $issuedAt] = array_pad(explode('.', $payload), 3, null);
-        if (!$userId || !$issuedAt) return null;
+        [$userId, $issuedAt, $nonce] = array_pad(explode('.', $payload), 3, null);
+        if (!$userId || !$issuedAt || !$nonce) return null;
         $ttlDays = (int)config('app.qr_ttl_days', 30);
         if ((time() - (int)$issuedAt) > $ttlDays * 86400) return null;
+
+        if ((bool)config('features.qr_nonce_single_use', false)) {
+            $stmt = Db::pdo()->prepare('INSERT INTO qr_nonces(nonce, user_id, used_at) VALUES(?,?,NOW())');
+            try {
+                $stmt->execute([$nonce, (int)$userId]);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
         return (int)$userId;
     }
 

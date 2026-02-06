@@ -54,6 +54,8 @@ $routes = [
         '/admin/settings' => [AdminController::class, 'settings'],
         '/admin/users' => [AdminController::class, 'users'],
         '/admin/locations' => [AdminController::class, 'locations'],
+        '/admin/promocodes' => [AdminController::class, 'promocodes'],
+        '/admin/missions' => [AdminController::class, 'missions'],
         '/admin/exports' => [AdminController::class, 'exports'],
         '/admin/audit' => [AdminController::class, 'audit'],
     ],
@@ -64,9 +66,12 @@ $routes = [
         '/profile/birthday' => [ProfileController::class, 'birthday'],
         '/staff/scan' => [StaffController::class, 'scan'],
         '/staff/order/create' => [StaffController::class, 'orderCreate'],
+        '/staff/reward/redeem' => [StaffController::class, 'redeemReward'],
         '/admin/settings' => [AdminController::class, 'settings'],
         '/admin/users' => [AdminController::class, 'users'],
         '/admin/locations' => [AdminController::class, 'locations'],
+        '/admin/promocodes' => [AdminController::class, 'promocodes'],
+        '/admin/missions' => [AdminController::class, 'missions'],
     ],
 ];
 

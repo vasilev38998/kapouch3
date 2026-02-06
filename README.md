@@ -36,8 +36,8 @@ PWA-приложение для кофейни: loyalty (штампы), cashback
 ## Базовые URL
 - Публичные: `/`, `/auth`, `/auth/verify`, `/r/{refcode}`, `/logout`
 - Пользователь: `/profile`, `/profile/qr`, `/profile/phone-change`, `/profile/birthday`, `/history`
-- Staff: `/staff`, `/staff/user/search`, `/staff/scan`, `/staff/order/create`, `/staff/order/{id}`, `/staff/order/{id}/reverse`, `/staff/promocodes`, `/staff/missions`
-- Admin: `/admin/settings`, `/admin/users`, `/admin/locations`, `/admin/exports`, `/admin/audit`
+- Staff: `/staff`, `/staff/user/search`, `/staff/scan`, `/staff/order/create`, `/staff/order/{id}`, `/staff/order/{id}/reverse`, `/staff/promocodes`, `/staff/missions`, `/staff/reward/redeem`
+- Admin: `/admin/settings`, `/admin/users`, `/admin/locations`, `/admin/promocodes`, `/admin/missions`, `/admin/exports`, `/admin/audit`
 
 ## Тестовые сценарии
 1. **Регистрация/OTP**
@@ -61,3 +61,11 @@ PWA-приложение для кофейни: loyalty (штампы), cashback
 - Финансовые операции только через ledger + reversal записи.
 - Антифрод лимиты проверяются централизованно.
 - В проекте есть задел под optional модули (preorder flag, External provider interface-заготовка можно расширить).
+
+
+## Дополнительно реализовано
+- Идемпотентность создания заказа через `idempotency_key`.
+- Staff-сценарий списания награды 6/6.
+- Admin CRUD-экраны для промокодов и миссий.
+- Опциональная одноразовость QR (через `features.qr_nonce_single_use` + `qr_nonces`).
+- In-app уведомления в профиле и camera QR decode через BarcodeDetector (где поддерживается).

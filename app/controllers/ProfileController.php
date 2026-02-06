@@ -23,17 +23,40 @@ class ProfileController {
         $ledger = new Ledger();
         $cashback = $ledger->cashbackBalance((int)$user['id']);
 
-        $hist = $pdo->prepare("(SELECT 'order' t, id, total_amount amt, created_at FROM orders WHERE user_id=?)
-            UNION ALL (SELECT 'cashback', id, amount, created_at FROM cashback_ledger WHERE user_id=?)
-            UNION ALL (SELECT 'stamp', id, delta, created_at FROM stamp_ledger WHERE user_id=?)
-            ORDER BY created_at DESC LIMIT 30");
-        $hist->execute([$user['id'], $user['id'], $user['id']]);
+        $history = [];
+
+        $orders = $pdo->prepare('SELECT id,total_amount,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
+        $orders->execute([$user['id']]);
+        foreach ($orders->fetchAll() as $row) {
+            $history[] = ['kind' => 'order', 'title' => 'Заказ #' . $row['id'], 'value' => $row['total_amount'] . ' ₽', 'meta' => $row['status'], 'created_at' => $row['created_at']];
+        }
+
+        $cb = $pdo->prepare('SELECT id,type,amount,created_at FROM cashback_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
+        $cb->execute([$user['id']]);
+        foreach ($cb->fetchAll() as $row) {
+            $history[] = ['kind' => 'cashback', 'title' => 'Cashback ' . $row['type'], 'value' => $row['amount'], 'meta' => 'ledger#' . $row['id'], 'created_at' => $row['created_at']];
+        }
+
+        $st = $pdo->prepare('SELECT id,delta,reason,created_at FROM stamp_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
+        $st->execute([$user['id']]);
+        foreach ($st->fetchAll() as $row) {
+            $history[] = ['kind' => 'stamps', 'title' => 'Штампы ' . $row['reason'], 'value' => (string)$row['delta'], 'meta' => 'ledger#' . $row['id'], 'created_at' => $row['created_at']];
+        }
+
+        $rw = $pdo->prepare('SELECT id,type,status,created_at FROM rewards WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
+        $rw->execute([$user['id']]);
+        foreach ($rw->fetchAll() as $row) {
+            $history[] = ['kind' => 'reward', 'title' => 'Награда ' . $row['type'], 'value' => $row['status'], 'meta' => 'reward#' . $row['id'], 'created_at' => $row['created_at']];
+        }
+
+        usort($history, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
+        $history = array_slice($history, 0, 40);
 
         view('profile/index', [
             'user' => $user,
             'loyalty' => $loyalty,
             'cashback' => $cashback,
-            'history' => $hist->fetchAll(),
+            'history' => $history,
             'review2gis' => config('review_links.2gis_url'),
             'reviewYandex' => config('review_links.yandex_url'),
         ]);

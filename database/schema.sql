@@ -50,10 +50,12 @@ CREATE TABLE IF NOT EXISTS orders (
   total_amount DECIMAL(10,2) NOT NULL,
   status ENUM('created','reversed','cancelled') NOT NULL DEFAULT 'created',
   meta_json TEXT NULL,
+  idempotency_key VARCHAR(64) NULL,
   created_at DATETIME NOT NULL,
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT fk_orders_staff FOREIGN KEY (staff_user_id) REFERENCES users(id),
-  CONSTRAINT fk_orders_location FOREIGN KEY (location_id) REFERENCES locations(id)
+  CONSTRAINT fk_orders_location FOREIGN KEY (location_id) REFERENCES locations(id),
+  UNIQUE KEY uniq_orders_idempotency (idempotency_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS cashback_ledger (
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS cashback_ledger (
   amount DECIMAL(10,2) NOT NULL,
   created_by_staff_id BIGINT UNSIGNED NULL,
   meta_json TEXT NULL,
+  idempotency_key VARCHAR(64) NULL,
   created_at DATETIME NOT NULL,
   CONSTRAINT fk_cb_user FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT fk_cb_order FOREIGN KEY (order_id) REFERENCES orders(id),
@@ -103,6 +106,7 @@ CREATE TABLE IF NOT EXISTS rewards (
   status ENUM('active','redeemed','expired') NOT NULL DEFAULT 'active',
   expires_at DATETIME NULL,
   meta_json TEXT NULL,
+  idempotency_key VARCHAR(64) NULL,
   created_at DATETIME NOT NULL,
   redeemed_at DATETIME NULL,
   CONSTRAINT fk_rewards_user FOREIGN KEY (user_id) REFERENCES users(id)
