@@ -126,7 +126,7 @@ async function initPushNotifications() {
     await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, endpoint }).toString()
+      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, endpoint, permission: Notification.permission }).toString()
     });
   } catch {}
 

@@ -170,8 +170,11 @@ class AdminController {
         $campaigns = Db::pdo()->query("SELECT c.*, COALESCE(SUM(CASE WHEN n.is_read=1 THEN 1 ELSE 0 END),0) AS read_count, COALESCE(COUNT(n.id),0) AS sent_count FROM push_campaigns c LEFT JOIN user_notifications n ON n.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC LIMIT 80")->fetchAll();
         $templates = Db::pdo()->query('SELECT * FROM push_templates WHERE is_active=1 ORDER BY id DESC LIMIT 30')->fetchAll();
         $subs = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn();
+        $subsActive15m = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions WHERE last_seen_at IS NOT NULL AND last_seen_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)')->fetchColumn();
+        $subsGranted = (int)Db::pdo()->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='granted'")->fetchColumn();
+        $subsDenied = (int)Db::pdo()->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='denied'")->fetchColumn();
         $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
-        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'audienceStats' => $audienceStats, 'templates' => $templates]);
+        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'subscriptionsActive15m' => $subsActive15m, 'subscriptionsGranted' => $subsGranted, 'subscriptionsDenied' => $subsDenied, 'audienceStats' => $audienceStats, 'templates' => $templates]);
     }
 
     private function dispatchScheduledCampaigns(): void {

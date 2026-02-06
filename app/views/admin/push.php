@@ -8,6 +8,13 @@
     <?php endforeach; ?>
   </div>
   <p class="muted">Поддерживаются мгновенные и отложенные кампании, плюс шаблоны.</p>
+  <div class="row" style="margin-top:6px">
+    <div class="chip">Активные за 15 мин: <?= (int)($subscriptionsActive15m ?? 0) ?></div>
+    <div class="chip">Разрешили уведомления: <?= (int)($subscriptionsGranted ?? 0) ?></div>
+    <div class="chip">Запретили уведомления: <?= (int)($subscriptionsDenied ?? 0) ?></div>
+  </div>
+  <p class="muted">Важно: текущая реализация — web notifications + polling (не настоящий Web Push). Для доставки пользователь должен быть в приложении/вкладке. Для фоновых push (когда сайт закрыт) нужен Web Push (VAPID + push event в service worker).</p>
+
 </section>
 
 <form method="post" class="card fade-in">

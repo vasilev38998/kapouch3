@@ -202,9 +202,12 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   user_id BIGINT UNSIGNED NOT NULL,
   endpoint VARCHAR(255) NOT NULL UNIQUE,
   user_agent VARCHAR(255) NULL,
+  permission ENUM('default','granted','denied') NOT NULL DEFAULT 'default',
   created_at DATETIME NOT NULL,
+  last_seen_at DATETIME NULL,
   CONSTRAINT fk_push_sub_user FOREIGN KEY (user_id) REFERENCES users(id),
-  INDEX idx_push_sub_user(user_id)
+  INDEX idx_push_sub_user(user_id),
+  INDEX idx_push_sub_seen(last_seen_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS push_campaigns (
