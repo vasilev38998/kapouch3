@@ -83,6 +83,70 @@ function initCopyButtons() {
   });
 }
 
+function initMenuFavorites() {
+  const cards = Array.from(document.querySelectorAll('[data-menu-item]'));
+  if (!cards.length) return;
+
+  const toggle = document.getElementById('favoritesToggle');
+  const summary = document.getElementById('favoritesSummary');
+  const storageKey = 'menu_favorites';
+  const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  const favorites = new Set(stored.map(String));
+
+  const updateSummary = () => {
+    if (!summary) return;
+    const count = favorites.size;
+    summary.textContent = count
+      ? `В избранном: ${count}. Нажмите ❤, чтобы быстро убрать или добавить позицию.`
+      : 'Добавляйте любимые позиции в избранное, чтобы не искать их каждый раз.';
+  };
+
+  const syncCard = (card) => {
+    const id = String(card.dataset.menuId || '');
+    const btn = card.querySelector('[data-favorite-toggle]');
+    const isFav = favorites.has(id);
+    card.classList.toggle('is-favorite', isFav);
+    if (btn) {
+      btn.classList.toggle('is-active', isFav);
+      btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+      const label = btn.querySelector('.favorite-text');
+      if (label) label.textContent = isFav ? 'В избранном' : 'В избранное';
+    }
+  };
+
+  const applyFilter = () => {
+    if (!toggle) return;
+    const showFavs = toggle.checked;
+    cards.forEach((card) => {
+      const id = String(card.dataset.menuId || '');
+      const isFav = favorites.has(id);
+      card.style.display = showFavs && !isFav ? 'none' : '';
+    });
+  };
+
+  cards.forEach((card) => {
+    syncCard(card);
+    const btn = card.querySelector('[data-favorite-toggle]');
+    btn?.addEventListener('click', () => {
+      const id = String(card.dataset.menuId || '');
+      if (!id) return;
+      if (favorites.has(id)) {
+        favorites.delete(id);
+      } else {
+        favorites.add(id);
+      }
+      localStorage.setItem(storageKey, JSON.stringify(Array.from(favorites)));
+      syncCard(card);
+      updateSummary();
+      applyFilter();
+    });
+  });
+
+  toggle?.addEventListener('change', applyFilter);
+  updateSummary();
+  applyFilter();
+}
+
 function applyPhoneMask(value) {
   const d = value.replace(/\D/g, '').replace(/^8/, '7');
   const n = d.startsWith('7') ? d.slice(1, 11) : d.slice(0, 10);
@@ -241,6 +305,7 @@ async function initCameraScan() {
 initAnimations();
 showInAppFeed();
 initCopyButtons();
+initMenuFavorites();
 initPhoneMask();
 initPushNotifications();
 initCameraScan();

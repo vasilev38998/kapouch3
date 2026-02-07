@@ -28,3 +28,15 @@ video#scanVideo{width:100%;border-radius:12px;border:2px solid var(--line);backg
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
 .chip{display:inline-block;background:#fff7df;border:1px solid #e4be5f;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:700}
+.menu-filters{position:relative;overflow:hidden}
+.menu-filters:after{content:'';position:absolute;inset:auto -40px -40px auto;width:120px;height:120px;background:radial-gradient(circle,#fff3b8,transparent 70%);opacity:.7}
+.favorites-summary{margin-top:8px;padding:8px 10px;border-radius:10px;background:#fff7df;border:1px dashed #e4be5f}
+.menu-card{display:flex;flex-direction:column;gap:6px}
+.menu-card__price{font-size:18px}
+.menu-card__actions{margin-top:auto;display:flex;justify-content:flex-end}
+.favorite-btn{display:inline-flex;align-items:center;gap:8px;border:2px solid #e4be5f;background:#fff7df;color:var(--brown);padding:8px 12px;border-radius:999px;font-weight:700;cursor:pointer;transition:transform .2s ease, box-shadow .2s ease, background .2s ease}
+.favorite-btn:hover{transform:translateY(-1px);box-shadow:0 8px 16px rgba(74,45,37,.12)}
+.favorite-btn.is-active{background:var(--brown);color:#fff;border-color:var(--brown)}
+.favorite-icon{font-size:16px;line-height:1}
+.menu-card.is-favorite{border-color:#e2b84d;box-shadow:0 14px 28px rgba(120,78,45,.18)}
+.fav-filter{display:flex;align-items:center;gap:6px;font-weight:700}
