@@ -155,3 +155,11 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 5. Где запускать Composer:
    - Запускайте `composer install` из папки домена, где лежит `composer.json` (обычно `~/sites/<domain>/` или `~/www/<domain>/`).
    - В `public_html` запускать не нужно, если она указывает на `public/`. `vendor/` должен находиться рядом с `composer.json`, а не внутри `public_html`.
+6. Права на запись:
+   - Проверьте, что папка `storage/logs/` доступна на запись для PHP.
+7. Генерация VAPID ключей на хостинге:
+   - Установите утилиту и сгенерируйте ключи:
+     - `./vendor/bin/web-push generate-vapid-keys`
+   - Скопируйте public/private в `config.php` (блок `web_push`).
+8. HTTPS:
+   - Включите SSL-сертификат в панели Beget, иначе Web Push и Service Worker работать не будут.
