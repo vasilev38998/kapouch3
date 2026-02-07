@@ -1,0 +1,9 @@
+{
+  "name": "kapouch/loyalty",
+  "description": "Kapouch loyalty PWA",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "minishlink/web-push": "^9.0"
+  }
+}
