@@ -152,3 +152,6 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
      - `php composer.phar install --no-dev --optimize-autoloader`
 4. Убедитесь, что веб-корень направлен в папку `public/` (в панели Beget это «корневая папка сайта»).  
    Если изменить корень нельзя, перенесите содержимое `public/` в корневую папку сайта.
+5. Где запускать Composer:
+   - Запускайте `composer install` из папки домена, где лежит `composer.json` (обычно `~/sites/<domain>/` или `~/www/<domain>/`).
+   - В `public_html` запускать не нужно, если она указывает на `public/`. `vendor/` должен находиться рядом с `composer.json`, а не внутри `public_html`.
