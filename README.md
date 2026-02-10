@@ -36,7 +36,7 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 ## Базовые URL
 - Публичные: `/`, `/auth`, `/auth/verify`, `/r/{refcode}`, `/logout`
 - Пользователь: `/profile`, `/profile/qr`, `/profile/invite`, `/profile/phone-change`, `/profile/birthday`, `/history`
-- Staff: `/staff`, `/staff/user/search`, `/staff/scan`, `/staff/order/create`, `/staff/order/{id}`, `/staff/order/{id}/reverse`, `/staff/promocodes`, `/staff/missions`, `/staff/reward/redeem`
+- Staff: `/staff`, `/staff/user/search`, `/staff/scan`, `/staff/order/create`, `/staff/order/{id}`, `/staff/order/{id}/reverse`, `/staff/orders/live`, `/staff/promocodes`, `/staff/missions`, `/staff/reward/redeem`
 - Admin: `/admin`, `/admin/settings`, `/admin/users`, `/admin/locations`, `/admin/promocodes`, `/admin/missions`, `/admin/push`, `/admin/data`, `/admin/exports`, `/admin/audit`
 
 ## Тестовые сценарии
@@ -192,3 +192,5 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 - сохраняется сессия оплаты в `payment_sessions`;
 - для оплаты требуется авторизация пользователя.
 
+
+- Лента заказов в реальном времени для бариста: `/staff/orders/live` + API `/api/staff/orders/live` и смена статуса через `/api/staff/orders/live/status`.

@@ -162,6 +162,62 @@ class StaffController {
         view('staff/promocodes', ['codes' => $codes]);
     }
 
+
+
+    public function liveOrders(): void {
+        Auth::requireRole(['barista', 'manager', 'admin']);
+        view('staff/live_orders');
+    }
+
+    public function liveOrdersFeed(): void {
+        Auth::requireRole(['barista', 'manager', 'admin']);
+        header('Content-Type: application/json; charset=utf-8');
+
+        $limit = max(5, min(100, (int)($_GET['limit'] ?? 30)));
+        $stmt = Db::pdo()->prepare('SELECT ps.id, ps.external_order_id, ps.amount, ps.status, ps.payload_json, ps.created_at, ps.updated_at, u.phone FROM payment_sessions ps JOIN users u ON u.id=ps.user_id ORDER BY ps.id DESC LIMIT ?');
+        $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
+
+        $items = array_map(static function (array $row): array {
+            $payload = json_decode((string)($row['payload_json'] ?? ''), true) ?: [];
+            return [
+                'id' => (int)$row['id'],
+                'external_order_id' => (string)$row['external_order_id'],
+                'amount' => (float)$row['amount'],
+                'status' => (string)$row['status'],
+                'created_at' => (string)$row['created_at'],
+                'updated_at' => (string)$row['updated_at'],
+                'phone' => (string)$row['phone'],
+                'cart' => $payload['cart'] ?? [],
+            ];
+        }, $rows ?: []);
+
+        echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function liveOrderStatus(): void {
+        Auth::requireRole(['barista', 'manager', 'admin']);
+        header('Content-Type: application/json; charset=utf-8');
+        if (!Csrf::verify($_POST['_csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'csrf'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $id = (int)($_POST['id'] ?? 0);
+        $status = (string)($_POST['status'] ?? '');
+        $allowed = ['created', 'accepted', 'preparing', 'ready', 'done', 'cancelled', 'failed'];
+        if ($id <= 0 || !in_array($status, $allowed, true)) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'error' => 'bad_input'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        Db::pdo()->prepare('UPDATE payment_sessions SET status=?, updated_at=NOW() WHERE id=?')->execute([$status, $id]);
+        echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    }
+
     public function missions(): void {
         Auth::requireRole(['barista', 'manager', 'admin']);
         $missions = Db::pdo()->query('SELECT * FROM missions ORDER BY id DESC')->fetchAll();

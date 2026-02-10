@@ -349,6 +349,79 @@ function initMenuCart() {
   render();
 }
 
+
+
+function initStaffLiveOrders() {
+  const feed = document.getElementById('liveOrdersFeed');
+  const status = document.getElementById('liveOrdersStatus');
+  if (!feed || !status) return;
+
+  const render = (items = []) => {
+    if (!items.length) {
+      feed.innerHTML = '<div class="card muted">Пока нет заказов.</div>';
+      return;
+    }
+
+    feed.innerHTML = items.map((item) => {
+      const cart = Array.isArray(item.cart) ? item.cart : [];
+      const lines = cart.map((line) => `<div class="live-order-line"><span>${line.name} × ${line.qty}</span><strong>${Number(line.sum || 0).toFixed(2)} ₽</strong></div>`).join('');
+      return `<article class="card live-order" data-live-id="${item.id}">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <strong>Заказ ${item.external_order_id}</strong>
+          <span class="chip">${item.status}</span>
+        </div>
+        <div class="muted">Телефон: ${item.phone} · ${item.created_at}</div>
+        <div class="live-order-lines">${lines || '<div class="muted">Состав не передан</div>'}</div>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <strong>${Number(item.amount || 0).toFixed(2)} ₽</strong>
+          <select data-live-status>
+            ${['created','accepted','preparing','ready','done','cancelled'].map((s) => `<option value="${s}" ${s===item.status?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </article>`;
+    }).join('');
+  };
+
+  const load = async () => {
+    try {
+      const res = await fetch('/api/staff/orders/live?limit=40', { credentials: 'same-origin' });
+      if (!res.ok) {
+        status.textContent = 'Ошибка доступа';
+        return;
+      }
+      const data = await res.json();
+      if (!data?.ok) {
+        status.textContent = 'Ошибка данных';
+        return;
+      }
+      status.textContent = `Онлайн · ${new Date().toLocaleTimeString()}`;
+      render(data.items || []);
+    } catch {
+      status.textContent = 'Нет соединения';
+    }
+  };
+
+  feed.addEventListener('change', async (e) => {
+    const select = e.target.closest('[data-live-status]');
+    if (!select) return;
+    const card = select.closest('[data-live-id]');
+    const id = card?.getAttribute('data-live-id') || '';
+    if (!id) return;
+    try {
+      await fetch('/api/staff/orders/live/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id, status: select.value }).toString(),
+      });
+      load();
+    } catch {}
+  });
+
+  load();
+  setInterval(load, 4000);
+}
+
 function applyPhoneMask(value) {
   const d = value.replace(/\D/g, '').replace(/^8/, '7');
   const n = d.startsWith('7') ? d.slice(1, 11) : d.slice(0, 10);
@@ -510,6 +583,7 @@ initCopyButtons();
 initMenuFavorites();
 initMenuCart();
 initAqsiSync();
+initStaffLiveOrders();
 initPhoneMask();
 initPushNotifications();
 initCameraScan();

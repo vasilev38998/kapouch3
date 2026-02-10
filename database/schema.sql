@@ -293,7 +293,7 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
   provider VARCHAR(50) NOT NULL,
   external_order_id VARCHAR(100) NOT NULL,
   amount DECIMAL(10,2) NOT NULL,
-  status ENUM('created','paid','failed','cancelled') NOT NULL DEFAULT 'created',
+  status ENUM('created','accepted','preparing','ready','done','paid','failed','cancelled') NOT NULL DEFAULT 'created',
   payload_json TEXT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,

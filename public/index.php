@@ -60,6 +60,8 @@ $routes = [
         '/staff/order/create' => [StaffController::class, 'orderCreate'],
         '/staff/promocodes' => [StaffController::class, 'promocodes'],
         '/staff/missions' => [StaffController::class, 'missions'],
+        '/staff/orders/live' => [StaffController::class, 'liveOrders'],
+        '/api/staff/orders/live' => [StaffController::class, 'liveOrdersFeed'],
         '/api/staff/aqsi/check' => [StaffController::class, 'aqsiLookup'],
         '/api/staff/aqsi/order' => [StaffController::class, 'aqsiLookup'],
 
@@ -88,6 +90,7 @@ $routes = [
         '/staff/scan' => [StaffController::class, 'scan'],
         '/staff/order/create' => [StaffController::class, 'orderCreate'],
         '/staff/reward/redeem' => [StaffController::class, 'redeemReward'],
+        '/api/staff/orders/live/status' => [StaffController::class, 'liveOrderStatus'],
 
         '/admin/settings' => [AdminController::class, 'settings'],
         '/admin/users' => [AdminController::class, 'users'],
