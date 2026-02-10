@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Lib\Audit;
+use App\Lib\AqsiExternalOrderProvider;
 use App\Lib\Auth;
 use App\Lib\Csrf;
 use App\Lib\Db;
@@ -71,6 +72,7 @@ class StaffController {
                 'meta' => [
                     'category' => $_POST['category'] ?? '',
                     'note' => $_POST['note'] ?? '',
+                    'aqsi_external_id' => trim((string)($_POST['aqsi_external_id'] ?? '')),
                 ],
             ]);
             Audit::log((int)$staff['id'], 'order_create', 'order', $orderId, 'ok');
@@ -79,6 +81,39 @@ class StaffController {
             Audit::log((int)$staff['id'], 'order_create', 'order', null, 'error', $e->getMessage());
             exit('Ошибка: ' . $e->getMessage());
         }
+    }
+
+    public function aqsiLookup(): void {
+        Auth::requireRole(['barista', 'manager', 'admin']);
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!Csrf::verify($_GET['_csrf'] ?? null)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'csrf'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $externalId = trim((string)($_GET['external_id'] ?? ''));
+        if ($externalId === '') {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'error' => 'external_id_required'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $provider = new AqsiExternalOrderProvider();
+        $order = $provider->fetchOrderByExternalId($externalId);
+        if (!$order) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        echo json_encode([
+            'ok' => true,
+            'external_id' => $order['external_id'],
+            'total_amount' => $order['total_amount'],
+            'paid_at' => $order['paid_at'],
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     public function orderView(int $id): void {

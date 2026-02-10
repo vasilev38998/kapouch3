@@ -108,6 +108,15 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 - Избранное в меню синхронизируется с сервером для авторизованных пользователей (`/api/menu/favorites`, `/api/menu/favorites/toggle`) и хранится локально как fallback.
 - Добавлена таблица `user_menu_favorites` в `database/schema.sql`.
 
+- Добавлена интеграция с AQSI: в staff-форме создания заказа можно подтянуть сумму по ID заказа AQSI (endpoint `/api/staff/aqsi/order`).
+
+## Интеграция с кассой AQSI
+1. Заполните в `config.php` блок:
+   - `aqsi.base_url` (обычно `https://api.aqsi.ru`)
+   - `aqsi.api_token` (токен API из кабинета AQSI)
+2. В `Staff -> Создать заказ` укажите `ID заказа AQSI` и нажмите `Подтянуть из AQSI`.
+3. Система автоматически подставит сумму в поле `Сумма`, а ID AQSI сохранится в `orders.meta_json.aqsi_external_id`.
+
 
 ## Почему "push не доходят" и что нужно настроить
 Текущая реализация в проекте — это **уведомления через polling + Notification API**, а не полноценный Web Push.

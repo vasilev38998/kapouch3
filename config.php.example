@@ -22,6 +22,10 @@ return [
         'private_key' => '',
         'subject' => 'mailto:admin@example.com',
     ],
+    'aqsi' => [
+        'base_url' => 'https://api.aqsi.ru',
+        'api_token' => '',
+    ],
     'sms_ru' => [
         'api_id' => 'sms_ru_api_id',
         'from' => 'Coffee',

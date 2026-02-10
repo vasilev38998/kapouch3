@@ -3,6 +3,12 @@
   <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
   <input type="hidden" name="idempotency_key" value="<?= htmlspecialchars((string)$idem) ?>">
   <label>User ID</label><input name="user_id" value="<?= htmlspecialchars((string)$user_id) ?>" required>
+  <label>ID заказа AQSI (опционально)</label>
+  <div class="row">
+    <input id="aqsiExternalId" name="aqsi_external_id" placeholder="Например: 1234567890" style="flex:1">
+    <button class="btn ghost" type="button" id="aqsiFetchBtn" data-aqsi-sync>Подтянуть из AQSI</button>
+  </div>
+  <small class="muted" id="aqsiStatus">Можно автоматически подтянуть сумму заказа по ID из кассы AQSI.</small>
   <label>Сумма</label><input name="total_amount" type="number" min="1" step="0.01" required>
   <label>Начислить штампов</label><input name="stamps" type="number" min="0" step="1" value="1" required>
   <label>Списать cashback</label><input name="cashback_spend" type="number" min="0" step="0.01" value="0">
