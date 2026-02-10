@@ -275,6 +275,17 @@ CREATE TABLE IF NOT EXISTS menu_items (
   INDEX idx_menu_category(category, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS user_menu_favorites (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  menu_item_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL,
+  CONSTRAINT fk_menu_fav_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_menu_fav_item FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_menu_favorite_user_item (user_id, menu_item_id),
+  INDEX idx_menu_favorites_user_created (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS qr_short_codes (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   code VARCHAR(20) NOT NULL UNIQUE,

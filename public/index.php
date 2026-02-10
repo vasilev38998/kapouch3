@@ -29,6 +29,7 @@ session_start();
 use App\Controllers\AdminController;
 use App\Controllers\AuthController;
 use App\Controllers\HomeController;
+use App\Controllers\MenuController;
 use App\Controllers\NotificationController;
 use App\Controllers\ProfileController;
 use App\Controllers\ReferralController;
@@ -72,6 +73,7 @@ $routes = [
         '/admin/audit' => [AdminController::class, 'audit'],
 
         '/api/notifications/poll' => [NotificationController::class, 'poll'],
+        '/api/menu/favorites' => [MenuController::class, 'favorites'],
     ],
     'POST' => [
         '/auth/send' => [AuthController::class, 'sendOtp'],
@@ -97,6 +99,7 @@ $routes = [
         '/api/notifications/read' => [NotificationController::class, 'read'],
         '/api/notifications/click' => [NotificationController::class, 'click'],
         '/api/notifications/read-all' => [NotificationController::class, 'readAll'],
+        '/api/menu/favorites/toggle' => [MenuController::class, 'toggleFavorite'],
     ],
 ];
 

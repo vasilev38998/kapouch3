@@ -92,13 +92,55 @@ function initMenuFavorites() {
   const storageKey = 'menu_favorites';
   const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
   const favorites = new Set(stored.map(String));
+  let syncing = false;
+
+  const persistLocal = () => {
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(favorites)));
+  };
+
+  const syncFromServer = async () => {
+    try {
+      const res = await fetch('/api/menu/favorites', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.ok || !Array.isArray(data.ids)) return;
+      favorites.clear();
+      data.ids.forEach((id) => favorites.add(String(id)));
+      persistLocal();
+      cards.forEach(syncCard);
+      updateSummary();
+      applyFilter();
+    } catch {}
+  };
+
+  const syncToServer = async (id) => {
+    try {
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, menu_item_id: String(id) }).toString();
+      const res = await fetch('/api/menu/favorites/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.ok) return;
+      const active = !!data.active;
+      if (active) favorites.add(String(id)); else favorites.delete(String(id));
+      persistLocal();
+      cards.forEach(syncCard);
+      updateSummary();
+      applyFilter();
+    } catch {}
+  };
 
   const updateSummary = () => {
     if (!summary) return;
     const count = favorites.size;
+    const suffix = syncing ? ' · синхронизация…' : '';
     summary.textContent = count
-      ? `В избранном: ${count}. Нажмите ❤, чтобы быстро убрать или добавить позицию.`
-      : 'Добавляйте любимые позиции в избранное, чтобы не искать их каждый раз.';
+      ? `В избранном: ${count}. Нажмите ❤, чтобы быстро убрать или добавить позицию.${suffix}`
+      : `Добавляйте любимые позиции в избранное, чтобы не искать их каждый раз.${suffix}`;
   };
 
   const syncCard = (card) => {
@@ -127,24 +169,26 @@ function initMenuFavorites() {
   cards.forEach((card) => {
     syncCard(card);
     const btn = card.querySelector('[data-favorite-toggle]');
-    btn?.addEventListener('click', () => {
+    btn?.addEventListener('click', async () => {
       const id = String(card.dataset.menuId || '');
       if (!id) return;
-      if (favorites.has(id)) {
-        favorites.delete(id);
-      } else {
-        favorites.add(id);
-      }
-      localStorage.setItem(storageKey, JSON.stringify(Array.from(favorites)));
+      if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
+      persistLocal();
       syncCard(card);
       updateSummary();
       applyFilter();
+      syncing = true;
+      updateSummary();
+      await syncToServer(id);
+      syncing = false;
+      updateSummary();
     });
   });
 
   toggle?.addEventListener('change', applyFilter);
   updateSummary();
   applyFilter();
+  syncFromServer();
 }
 
 function applyPhoneMask(value) {
