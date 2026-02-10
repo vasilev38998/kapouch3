@@ -25,6 +25,8 @@ return [
     'aqsi' => [
         'base_url' => 'https://api.aqsi.ru',
         'api_token' => '',
+        'receipt_path' => '/v1/receipts/{id}',
+        'order_path' => '/v1/orders/{id}',
     ],
     'sms_ru' => [
         'api_id' => 'sms_ru_api_id',

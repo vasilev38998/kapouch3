@@ -59,6 +59,7 @@ $routes = [
         '/staff/order/create' => [StaffController::class, 'orderCreate'],
         '/staff/promocodes' => [StaffController::class, 'promocodes'],
         '/staff/missions' => [StaffController::class, 'missions'],
+        '/api/staff/aqsi/check' => [StaffController::class, 'aqsiLookup'],
         '/api/staff/aqsi/order' => [StaffController::class, 'aqsiLookup'],
 
         '/admin' => [AdminController::class, 'dashboard'],

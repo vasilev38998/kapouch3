@@ -198,33 +198,36 @@ function initAqsiSync() {
   const ext = document.getElementById('aqsiExternalId');
   const amount = document.querySelector('input[name="total_amount"]');
   const status = document.getElementById('aqsiStatus');
+  const sourceInput = document.getElementById('aqsiSource');
   if (!btn || !ext || !amount) return;
 
   btn.addEventListener('click', async () => {
     const externalId = (ext.value || '').trim();
     if (!externalId) {
-      if (status) status.textContent = 'Укажите ID заказа AQSI.';
+      if (status) status.textContent = 'Укажите ID чека AQSI.';
       return;
     }
 
     btn.disabled = true;
     const oldText = btn.textContent;
     btn.textContent = 'Загрузка...';
-    if (status) status.textContent = 'Запрашиваем данные заказа из AQSI...';
+    if (status) status.textContent = 'Запрашиваем данные чека из AQSI...';
 
     try {
-      const url = `/api/staff/aqsi/order?external_id=${encodeURIComponent(externalId)}&_csrf=${encodeURIComponent(window.CSRF_TOKEN || '')}`;
+      const url = `/api/staff/aqsi/check?external_id=${encodeURIComponent(externalId)}&_csrf=${encodeURIComponent(window.CSRF_TOKEN || '')}`;
       const res = await fetch(url, { credentials: 'same-origin' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) {
-        if (status) status.textContent = 'Заказ не найден в AQSI или нет доступа к API.';
+        if (status) status.textContent = 'Чек не найден в AQSI или нет доступа к API.';
         return;
       }
 
       amount.value = String(data.total_amount || '');
+      if (sourceInput) sourceInput.value = String(data.source || '');
       if (status) {
         const paid = data.paid_at ? `, оплачен: ${data.paid_at}` : '';
-        status.textContent = `Успешно: сумма ${data.total_amount} ₽${paid}`;
+        const sourceLabel = data.source === 'receipt' ? 'чек' : (data.source === 'order' ? 'заказ' : 'документ');
+        status.textContent = `Успешно (${sourceLabel}): сумма ${data.total_amount} ₽${paid}`;
       }
     } catch {
       if (status) status.textContent = 'Ошибка связи с AQSI. Проверьте настройки API.';

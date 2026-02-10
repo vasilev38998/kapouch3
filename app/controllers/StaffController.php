@@ -73,6 +73,7 @@ class StaffController {
                     'category' => $_POST['category'] ?? '',
                     'note' => $_POST['note'] ?? '',
                     'aqsi_external_id' => trim((string)($_POST['aqsi_external_id'] ?? '')),
+                    'aqsi_source' => trim((string)($_POST['aqsi_source'] ?? '')),
                 ],
             ]);
             Audit::log((int)$staff['id'], 'order_create', 'order', $orderId, 'ok');
@@ -101,8 +102,8 @@ class StaffController {
         }
 
         $provider = new AqsiExternalOrderProvider();
-        $order = $provider->fetchOrderByExternalId($externalId);
-        if (!$order) {
+        $check = $provider->fetchOrderByExternalId($externalId);
+        if (!$check) {
             http_response_code(404);
             echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
             return;
@@ -110,9 +111,10 @@ class StaffController {
 
         echo json_encode([
             'ok' => true,
-            'external_id' => $order['external_id'],
-            'total_amount' => $order['total_amount'],
-            'paid_at' => $order['paid_at'],
+            'external_id' => $check['external_id'],
+            'total_amount' => $check['total_amount'],
+            'paid_at' => $check['paid_at'],
+            'source' => $check['source'] ?? 'unknown',
         ], JSON_UNESCAPED_UNICODE);
     }
 
