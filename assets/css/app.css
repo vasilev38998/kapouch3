@@ -40,3 +40,10 @@ video#scanVideo{width:100%;border-radius:12px;border:2px solid var(--line);backg
 .favorite-icon{font-size:16px;line-height:1}
 .menu-card.is-favorite{border-color:#e2b84d;box-shadow:0 14px 28px rgba(120,78,45,.18)}
 .fav-filter{display:flex;align-items:center;gap:6px;font-weight:700}
+
+.menu-qty{display:flex;align-items:center;gap:8px;margin:6px 0}
+.qty-btn{width:34px;height:34px;border-radius:10px;border:2px solid #e4be5f;background:#fff7df;color:var(--brown);font-size:20px;line-height:1;cursor:pointer}
+.menu-qty input[data-qty-input]{width:70px;text-align:center;padding:8px}
+#menuCart{position:sticky;top:68px;z-index:5}
+.menu-cart-total{margin:8px 0 10px;font-size:18px}
+.menu-cart-line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed #e9c867}

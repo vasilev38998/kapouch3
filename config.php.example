@@ -28,6 +28,12 @@ return [
         'receipt_path' => '/v1/receipts/{id}',
         'order_path' => '/v1/orders/{id}',
     ],
+
+    'tinkoff' => [
+        'base_url' => 'https://securepay.tinkoff.ru/v2',
+        'terminal_key' => '',
+        'password' => '',
+    ],
     'sms_ru' => [
         'api_id' => 'sms_ru_api_id',
         'from' => 'Coffee',

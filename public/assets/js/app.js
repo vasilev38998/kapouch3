@@ -238,6 +238,117 @@ function initAqsiSync() {
   });
 }
 
+
+function initMenuCart() {
+  const cards = Array.from(document.querySelectorAll('[data-menu-item]'));
+  const cartRoot = document.querySelector('[data-menu-cart]');
+  if (!cards.length || !cartRoot) return;
+
+  const list = document.getElementById('menuCartList');
+  const totalEl = document.getElementById('menuCartTotal');
+  const payBtn = document.getElementById('menuPayBtn');
+  const clearBtn = document.getElementById('menuCartClear');
+  const status = document.getElementById('menuPayStatus');
+  const storageKey = 'menu_cart_v1';
+  const cart = new Map(Object.entries(JSON.parse(localStorage.getItem(storageKey) || '{}')).map(([k,v]) => [k, Number(v) || 0]));
+
+  const save = () => {
+    const obj = {};
+    cart.forEach((qty, id) => { if (qty > 0) obj[id] = qty; });
+    localStorage.setItem(storageKey, JSON.stringify(obj));
+  };
+
+  const render = () => {
+    let total = 0;
+    const rows = [];
+    cards.forEach((card) => {
+      const id = String(card.dataset.menuId || '');
+      const name = String(card.dataset.menuName || '');
+      const price = Number(card.dataset.menuPrice || '0');
+      const qty = Math.max(0, Math.min(20, Number(cart.get(id) || 0)));
+      cart.set(id, qty);
+      const input = card.querySelector('[data-qty-input]');
+      if (input) input.value = String(qty);
+      if (qty > 0 && price > 0) {
+        const sum = qty * price;
+        total += sum;
+        rows.push(`<div class="menu-cart-line"><span>${name} × ${qty}</span><strong>${sum.toFixed(2)} ₽</strong></div>`);
+      }
+    });
+
+    if (list) list.innerHTML = rows.length ? rows.join('') : '<span class="muted">Добавьте позиции из меню.</span>';
+    if (totalEl) totalEl.textContent = `${total.toFixed(2)} ₽`;
+    if (payBtn) payBtn.disabled = total <= 0;
+    save();
+  };
+
+  cards.forEach((card) => {
+    const id = String(card.dataset.menuId || '');
+    const input = card.querySelector('[data-qty-input]');
+    const plus = card.querySelector('[data-qty-plus]');
+    const minus = card.querySelector('[data-qty-minus]');
+
+    plus?.addEventListener('click', () => {
+      cart.set(id, Math.min(20, Number(cart.get(id) || 0) + 1));
+      render();
+    });
+    minus?.addEventListener('click', () => {
+      cart.set(id, Math.max(0, Number(cart.get(id) || 0) - 1));
+      render();
+    });
+    input?.addEventListener('change', () => {
+      cart.set(id, Math.max(0, Math.min(20, Number(input.value || 0))));
+      render();
+    });
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    cart.clear();
+    render();
+  });
+
+  payBtn?.addEventListener('click', async () => {
+    const items = [];
+    cart.forEach((qty, id) => {
+      if (qty > 0) items.push({ id: Number(id), qty: Number(qty) });
+    });
+    if (!items.length) return;
+
+    payBtn.disabled = true;
+    const oldText = payBtn.textContent;
+    payBtn.textContent = 'Создаём платёж...';
+    if (status) status.textContent = 'Инициализация платежа...';
+
+    try {
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items) }).toString();
+      const res = await fetch('/api/checkout/sbp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || !data?.payment_url) {
+        if (res.status === 401) {
+          if (status) status.textContent = 'Для оплаты войдите в аккаунт.';
+        } else {
+          if (status) status.textContent = 'Не удалось создать платёж. Попробуйте ещё раз.';
+        }
+        return;
+      }
+      if (status) status.textContent = `Переходим к оплате: ${data.amount} ₽`;
+      window.location.href = data.payment_url;
+    } catch {
+      if (status) status.textContent = 'Ошибка сети при создании платежа.';
+    } finally {
+      payBtn.disabled = false;
+      payBtn.textContent = oldText;
+    }
+  });
+
+  render();
+}
+
 function applyPhoneMask(value) {
   const d = value.replace(/\D/g, '').replace(/^8/, '7');
   const n = d.startsWith('7') ? d.slice(1, 11) : d.slice(0, 10);
@@ -397,6 +508,7 @@ initAnimations();
 showInAppFeed();
 initCopyButtons();
 initMenuFavorites();
+initMenuCart();
 initAqsiSync();
 initPhoneMask();
 initPushNotifications();

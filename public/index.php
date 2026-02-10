@@ -28,6 +28,7 @@ session_start();
 
 use App\Controllers\AdminController;
 use App\Controllers\AuthController;
+use App\Controllers\CheckoutController;
 use App\Controllers\HomeController;
 use App\Controllers\MenuController;
 use App\Controllers\NotificationController;
@@ -102,6 +103,7 @@ $routes = [
         '/api/notifications/click' => [NotificationController::class, 'click'],
         '/api/notifications/read-all' => [NotificationController::class, 'readAll'],
         '/api/menu/favorites/toggle' => [MenuController::class, 'toggleFavorite'],
+        '/api/checkout/sbp' => [CheckoutController::class, 'sbp'],
     ],
 ];
 

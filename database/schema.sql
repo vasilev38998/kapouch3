@@ -286,6 +286,22 @@ CREATE TABLE IF NOT EXISTS user_menu_favorites (
   INDEX idx_menu_favorites_user_created (user_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+
+CREATE TABLE IF NOT EXISTS payment_sessions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  provider VARCHAR(50) NOT NULL,
+  external_order_id VARCHAR(100) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  status ENUM('created','paid','failed','cancelled') NOT NULL DEFAULT 'created',
+  payload_json TEXT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE KEY uniq_payment_provider_order (provider, external_order_id),
+  INDEX idx_payments_user_created (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS qr_short_codes (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   code VARCHAR(20) NOT NULL UNIQUE,

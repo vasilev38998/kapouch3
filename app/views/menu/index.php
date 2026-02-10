@@ -15,6 +15,17 @@
   </form>
   <div id="favoritesSummary" class="favorites-summary muted">Добавляйте любимые позиции в избранное, чтобы не искать их каждый раз.</div>
 </section>
+<section class="card" id="menuCart" data-menu-cart>
+  <h3>Корзина</h3>
+  <div id="menuCartList" class="muted">Добавьте позиции из меню.</div>
+  <div class="menu-cart-total">Итого: <strong id="menuCartTotal">0.00 ₽</strong></div>
+  <div class="row">
+    <button class="btn" type="button" id="menuPayBtn" data-menu-pay>Оплатить через СБП Т‑Банк</button>
+    <button class="btn ghost" type="button" id="menuCartClear">Очистить</button>
+  </div>
+  <small class="muted" id="menuPayStatus">Для оплаты нужен вход в аккаунт.</small>
+</section>
+
 <section class="grid-2" data-menu-list>
   <?php
     $filtered = [];
@@ -28,7 +39,7 @@
     <div class="card">Пока нет доступных позиций меню по выбранным фильтрам.</div>
   <?php endif; ?>
   <?php foreach ($filtered as $item): ?>
-    <article class="card menu-card" data-menu-item data-menu-id="<?= (int)$item['id'] ?>">
+    <article class="card menu-card" data-menu-item data-menu-id="<?= (int)$item['id'] ?>" data-menu-name="<?= htmlspecialchars((string)$item['name']) ?>" data-menu-price="<?= number_format((float)$item['price'], 2, '.', '') ?>">
       <?php if (!empty($item['image_url'])): ?>
         <img src="<?= htmlspecialchars((string)$item['image_url']) ?>" alt="<?= htmlspecialchars((string)$item['name']) ?>" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-bottom:8px">
       <?php endif; ?>
@@ -39,6 +50,11 @@
       <h3><?= htmlspecialchars((string)$item['name']) ?></h3>
       <div class="menu-card__price"><strong><?= number_format((float)$item['price'], 2, '.', ' ') ?> ₽</strong></div>
       <?php if (!empty($item['description'])): ?><p class="muted"><?= htmlspecialchars((string)$item['description']) ?></p><?php endif; ?>
+      <div class="menu-qty">
+        <button type="button" class="qty-btn" data-qty-minus>−</button>
+        <input type="number" min="0" max="20" step="1" value="0" data-qty-input>
+        <button type="button" class="qty-btn" data-qty-plus>+</button>
+      </div>
       <div class="menu-card__actions">
         <button class="favorite-btn" type="button" data-favorite-toggle aria-pressed="false">
           <span class="favorite-icon" aria-hidden="true">❤</span>
