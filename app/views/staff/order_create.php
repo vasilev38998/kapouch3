@@ -1,21 +1,16 @@
-<h2>Создать заказ</h2>
+<h2>Начисление по коду клиента</h2>
 <form method="post" class="card">
   <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
   <input type="hidden" name="idempotency_key" value="<?= htmlspecialchars((string)$idem) ?>">
-  <label>User ID</label><input name="user_id" value="<?= htmlspecialchars((string)$user_id) ?>" required>
-  <label>ID чека AQSI (опционально)</label>
-  <div class="row">
-    <input id="aqsiExternalId" name="aqsi_external_id" placeholder="Например: 1234567890" style="flex:1">
-    <input type="hidden" id="aqsiSource" name="aqsi_source" value="">
-    <button class="btn ghost" type="button" id="aqsiFetchBtn" data-aqsi-sync>Подтянуть из AQSI</button>
-  </div>
-  <small class="muted" id="aqsiStatus">Можно автоматически подтянуть сумму чека по ID из кассы AQSI.</small>
-  <label>Сумма</label><input name="total_amount" type="number" min="1" step="0.01" required>
-  <label>Начислить штампов</label><input name="stamps" type="number" min="0" step="1" value="1" required>
-  <label>Списать cashback</label><input name="cashback_spend" type="number" min="0" step="0.01" value="0">
-  <label>Локация ID</label><input name="location_id" type="number">
-  <label>Категория</label><input name="category">
-  <label>Промокод</label><input name="promocode">
-  <label>Заметка</label><input name="note">
-  <button class="btn">Провести заказ</button>
+
+  <label>Код клиента (User ID)</label>
+  <input name="user_id" value="<?= htmlspecialchars((string)$user_id) ?>" required>
+
+  <label>Сумма заказа (для расчёта кэшбэка)</label>
+  <input name="total_amount" type="number" min="1" step="0.01" required>
+
+  <label>Сколько начислить штампов</label>
+  <input name="stamps" type="number" min="0" step="1" value="1" required>
+
+  <button class="btn">Начислить</button>
 </form>

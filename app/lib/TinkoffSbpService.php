@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Lib;
 
 class TinkoffSbpService {
-    public function createSbpPayment(array $payload): ?array {
+    public function createSbpPayment(array $payload): array {
         $terminalKey = (string)config('tinkoff.terminal_key', '');
         $password = (string)config('tinkoff.password', '');
         $baseUrl = rtrim((string)config('tinkoff.base_url', 'https://securepay.tinkoff.ru/v2'), '/');
 
         if ($terminalKey === '' || $password === '') {
-            return null;
+            return ['ok' => false, 'error' => 'config_missing'];
         }
 
         $request = [
@@ -45,17 +45,32 @@ class TinkoffSbpService {
         curl_close($ch);
 
         if ($httpCode < 200 || $httpCode >= 300 || !is_string($body) || $body === '') {
-            return null;
+            return ['ok' => false, 'error' => 'http_error'];
         }
 
         $json = json_decode($body, true);
-        if (!is_array($json) || empty($json['Success'])) {
-            return null;
+        if (!is_array($json)) {
+            return ['ok' => false, 'error' => 'bad_json'];
+        }
+
+        if (empty($json['Success'])) {
+            return [
+                'ok' => false,
+                'error' => 'provider_error',
+                'details' => (string)($json['Message'] ?? $json['Details'] ?? ''),
+                'raw' => $json,
+            ];
+        }
+
+        $paymentUrl = (string)($json['PaymentURL'] ?? '');
+        if ($paymentUrl === '') {
+            return ['ok' => false, 'error' => 'empty_payment_url', 'raw' => $json];
         }
 
         return [
+            'ok' => true,
             'payment_id' => (string)($json['PaymentId'] ?? ''),
-            'payment_url' => (string)($json['PaymentURL'] ?? ''),
+            'payment_url' => $paymentUrl,
             'raw' => $json,
         ];
     }

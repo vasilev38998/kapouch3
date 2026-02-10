@@ -98,9 +98,16 @@ class CheckoutController {
             'customer_key' => 'user-' . (int)$user['id'],
         ]);
 
-        if (!$payment || $payment['payment_url'] === '') {
-            http_response_code(502);
-            echo json_encode(['ok' => false, 'error' => 'payment_init_failed'], JSON_UNESCAPED_UNICODE);
+        if (empty($payment['ok']) || empty($payment['payment_url'])) {
+            $error = (string)($payment['error'] ?? 'payment_init_failed');
+            $details = (string)($payment['details'] ?? '');
+            $status = $error === 'config_missing' ? 500 : 502;
+            http_response_code($status);
+            echo json_encode([
+                'ok' => false,
+                'error' => $error,
+                'message' => $details,
+            ], JSON_UNESCAPED_UNICODE);
             return;
         }
 

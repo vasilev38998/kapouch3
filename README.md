@@ -47,7 +47,7 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
    - В профиле открыть `/profile/qr`, скопировать token.
    - В staff `/staff/scan` вставить token → переход к заказу.
 3. **Начисление/списание/реверс**
-   - `/staff/order/create`: сумма, cashback_spend.
+   - `/staff/order/create`: код клиента (user_id), сумма заказа, количество штампов.
    - Проверить ledger + `/staff/order/{id}` → reversal.
 4. **Промокод/реферал/миссия**
    - Создать promocode в БД и применить в заказе.
@@ -108,7 +108,7 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 - Избранное в меню синхронизируется с сервером для авторизованных пользователей (`/api/menu/favorites`, `/api/menu/favorites/toggle`) и хранится локально как fallback.
 - Добавлена таблица `user_menu_favorites` в `database/schema.sql`.
 
-- Добавлена интеграция с AQSI: в staff-форме создания заказа можно подтянуть сумму по ID чека AQSI (endpoint `/api/staff/aqsi/check`; fallback на order endpoint).
+- Добавлена интеграция с AQSI через API (`/api/staff/aqsi/check`) для сервисных сценариев.
 
 ## Интеграция с кассой AQSI
 1. Заполните в `config.php` блок:
@@ -116,8 +116,8 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
    - `aqsi.api_token` (токен API из кабинета AQSI)
    - `aqsi.receipt_path` (по умолчанию `/v1/receipts/{id}`)
    - `aqsi.order_path` (fallback, по умолчанию `/v1/orders/{id}`)
-2. В `Staff -> Создать заказ` укажите `ID чека AQSI` и нажмите `Подтянуть из AQSI`.
-3. Система автоматически подставит сумму в поле `Сумма`, а ID AQSI сохранится в `orders.meta_json.aqsi_external_id` (и источник в `aqsi_source`).
+2. Endpoint можно использовать для внутренних интеграций и автоматизации (`receipt` с fallback на `order`).
+3. Текущий staff-экран начисления упрощён до: код клиента, сумма заказа, количество штампов.
 
 
 ## Почему "push не доходят" и что нужно настроить
@@ -194,3 +194,5 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 
 
 - Лента заказов в реальном времени для бариста: `/staff/orders/live` + API `/api/staff/orders/live` и смена статуса через `/api/staff/orders/live/status`.
+
+Если при оплате вы видите «не удалось создать платёж», теперь API возвращает точную причину: не настроены ключи (`config_missing`) или ошибка провайдера (`provider_error`).

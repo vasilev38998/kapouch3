@@ -63,17 +63,14 @@ class StaffController {
             $orderId = $ledger->createOrder([
                 'user_id' => (int)$_POST['user_id'],
                 'staff_user_id' => (int)$staff['id'],
-                'location_id' => (int)($_POST['location_id'] ?: 0),
+                'location_id' => null,
                 'total_amount' => (float)$_POST['total_amount'],
-                'cashback_spend' => (float)($_POST['cashback_spend'] ?? 0),
-                'promocode' => $_POST['promocode'] ?? null,
+                'cashback_spend' => 0.0,
+                'promocode' => null,
                 'stamps' => (int)($_POST['stamps'] ?? 1),
                 'idempotency_key' => $_POST['idempotency_key'] ?? null,
                 'meta' => [
-                    'category' => $_POST['category'] ?? '',
-                    'note' => $_POST['note'] ?? '',
-                    'aqsi_external_id' => trim((string)($_POST['aqsi_external_id'] ?? '')),
-                    'aqsi_source' => trim((string)($_POST['aqsi_source'] ?? '')),
+                    'source' => 'staff_simple_accrual',
                 ],
             ]);
             Audit::log((int)$staff['id'], 'order_create', 'order', $orderId, 'ok');

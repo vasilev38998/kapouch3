@@ -331,8 +331,12 @@ function initMenuCart() {
       if (!res.ok || !data?.ok || !data?.payment_url) {
         if (res.status === 401) {
           if (status) status.textContent = 'Для оплаты войдите в аккаунт.';
+        } else if (data?.error === 'config_missing') {
+          if (status) status.textContent = 'Платёж временно недоступен: не настроены ключи Т‑Банка.';
+        } else if (data?.error === 'provider_error') {
+          if (status) status.textContent = data?.message ? `Т‑Банк: ${data.message}` : 'Т‑Банк отклонил инициализацию платежа.';
         } else {
-          if (status) status.textContent = 'Не удалось создать платёж. Попробуйте ещё раз.';
+          if (status) status.textContent = 'Не удалось создать платёж. Проверьте настройки и повторите.';
         }
         return;
       }
