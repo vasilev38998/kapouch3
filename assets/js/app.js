@@ -249,6 +249,8 @@ function initMenuCart() {
   const payBtn = document.getElementById('menuPayBtn');
   const clearBtn = document.getElementById('menuCartClear');
   const status = document.getElementById('menuPayStatus');
+  const spendInput = document.getElementById('menuCashbackSpend');
+  const spendHint = document.getElementById('menuCashbackHint');
   const storageKey = 'menu_cart_v1';
   const cart = new Map(Object.entries(JSON.parse(localStorage.getItem(storageKey) || '{}')).map(([k,v]) => [k, Number(v) || 0]));
 
@@ -278,6 +280,11 @@ function initMenuCart() {
 
     if (list) list.innerHTML = rows.length ? rows.join('') : '<span class="muted">Добавьте позиции из меню.</span>';
     if (totalEl) totalEl.textContent = `${total.toFixed(2)} ₽`;
+
+    const spend = Math.max(0, Number(spendInput?.value || 0));
+    const payable = Math.max(0.01, total - spend);
+    if (spendHint) spendHint.textContent = `К оплате по СБП: ${payable.toFixed(2)} ₽`;
+
     if (payBtn) payBtn.disabled = total <= 0;
     save();
   };
@@ -307,6 +314,8 @@ function initMenuCart() {
     render();
   });
 
+  spendInput?.addEventListener('input', render);
+
   payBtn?.addEventListener('click', async () => {
     const items = [];
     cart.forEach((qty, id) => {
@@ -320,7 +329,8 @@ function initMenuCart() {
     if (status) status.textContent = 'Инициализация платежа...';
 
     try {
-      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items) }).toString();
+      const cashbackSpend = Math.max(0, Number(spendInput?.value || 0)).toFixed(2);
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items), cashback_spend: cashbackSpend }).toString();
       const res = await fetch('/api/checkout/sbp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -340,7 +350,7 @@ function initMenuCart() {
         }
         return;
       }
-      if (status) status.textContent = `Переходим к оплате: ${data.amount} ₽`;
+      if (status) status.textContent = `К оплате: ${data.amount} ₽ (списано кэшбэка: ${data.cashback_spend || 0} ₽)`;
       window.location.href = data.payment_url;
     } catch {
       if (status) status.textContent = 'Ошибка сети при создании платежа.';

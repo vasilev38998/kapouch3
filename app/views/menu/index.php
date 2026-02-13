@@ -19,6 +19,9 @@
   <h3>Корзина</h3>
   <div id="menuCartList" class="muted">Добавьте позиции из меню.</div>
   <div class="menu-cart-total">Итого: <strong id="menuCartTotal">0.00 ₽</strong></div>
+  <label>Списать кэшбэк</label>
+  <input id="menuCashbackSpend" type="number" min="0" step="0.01" value="0">
+  <small class="muted" id="menuCashbackHint">К оплате по СБП: 0.00 ₽</small>
   <div class="row">
     <button class="btn" type="button" id="menuPayBtn" data-menu-pay>Оплатить через СБП Т‑Банк</button>
     <button class="btn ghost" type="button" id="menuCartClear">Очистить</button>

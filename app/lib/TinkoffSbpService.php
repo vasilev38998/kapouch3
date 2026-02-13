@@ -6,9 +6,9 @@ namespace App\Lib;
 
 class TinkoffSbpService {
     public function createSbpPayment(array $payload): array {
-        $terminalKey = (string)config('tinkoff.terminal_key', '');
-        $password = (string)config('tinkoff.password', '');
-        $baseUrl = rtrim((string)config('tinkoff.base_url', 'https://securepay.tinkoff.ru/v2'), '/');
+        $terminalKey = (string)Settings::get('tinkoff.terminal_key', config('tinkoff.terminal_key', ''));
+        $password = (string)Settings::get('tinkoff.password', config('tinkoff.password', ''));
+        $baseUrl = rtrim((string)Settings::get('tinkoff.base_url', config('tinkoff.base_url', 'https://securepay.tinkoff.ru/v2')), '/');
 
         if ($terminalKey === '' || $password === '') {
             return ['ok' => false, 'error' => 'config_missing'];

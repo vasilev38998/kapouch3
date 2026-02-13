@@ -38,18 +38,50 @@ class AdminController {
 
     public function settings(): void {
         Auth::requireRole(['admin']);
+
+        $meta = $this->settingsMeta();
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
-            foreach ($_POST as $k => $v) {
-                if ($k === '_csrf') continue;
-                $old = Settings::get($k, null);
-                Settings::set($k, $v);
-                Audit::log((int)Auth::user()['id'], 'settings_update', 'setting', null, 'ok', $k . ': ' . (string)$old . ' -> ' . (string)$v);
+            foreach ($meta as $key => $m) {
+                if (!array_key_exists($key, $_POST)) continue;
+                $val = trim((string)$_POST[$key]);
+                $old = Settings::get($key, $m['default'] ?? null);
+                Settings::set($key, $val);
+                Audit::log((int)Auth::user()['id'], 'settings_update', 'setting', null, 'ok', $key . ': ' . (string)$old . ' -> ' . $val);
             }
             redirect('/admin/settings');
         }
-        $rows = Db::pdo()->query('SELECT * FROM settings ORDER BY `key`')->fetchAll();
-        view('admin/settings', ['rows' => $rows]);
+
+        $values = [];
+        foreach ($meta as $key => $m) {
+            $values[$key] = (string)Settings::get($key, (string)($m['default'] ?? ''));
+        }
+
+        view('admin/settings', ['meta' => $meta, 'values' => $values]);
+    }
+
+    private function settingsMeta(): array {
+        return [
+            'cashback_percent' => ['label' => 'Кэшбэк начисление, %', 'default' => '5'],
+            'cashback_max_spend_percent' => ['label' => 'Макс. списание кэшбэка от чека, %', 'default' => '30'],
+            'stamps_required_for_reward' => ['label' => 'Штампов для награды', 'default' => '6'],
+
+            'review_links.2gis_url' => ['label' => 'Ссылка на 2ГИС', 'default' => (string)config('review_links.2gis_url', '')],
+            'review_links.yandex_url' => ['label' => 'Ссылка на Яндекс Карты', 'default' => (string)config('review_links.yandex_url', '')],
+
+            'tinkoff.base_url' => ['label' => 'Т‑Банк API URL', 'default' => (string)config('tinkoff.base_url', 'https://securepay.tinkoff.ru/v2')],
+            'tinkoff.terminal_key' => ['label' => 'Т‑Банк Terminal Key', 'default' => (string)config('tinkoff.terminal_key', '')],
+            'tinkoff.password' => ['label' => 'Т‑Банк Password', 'default' => (string)config('tinkoff.password', '')],
+
+            'aqsi.base_url' => ['label' => 'AQSI API URL', 'default' => (string)config('aqsi.base_url', '')],
+            'aqsi.api_token' => ['label' => 'AQSI API Token', 'default' => (string)config('aqsi.api_token', '')],
+            'aqsi.receipt_path' => ['label' => 'AQSI путь чека', 'default' => (string)config('aqsi.receipt_path', '/v1/receipts/{id}')],
+            'aqsi.order_path' => ['label' => 'AQSI fallback путь заказа', 'default' => (string)config('aqsi.order_path', '/v1/orders/{id}')],
+
+            'web_push.public_key' => ['label' => 'Web Push Public Key', 'default' => (string)config('web_push.public_key', '')],
+            'web_push.private_key' => ['label' => 'Web Push Private Key', 'default' => (string)config('web_push.private_key', '')],
+            'web_push.subject' => ['label' => 'Web Push Subject', 'default' => (string)config('web_push.subject', '')],
+        ];
     }
 
     public function users(): void {

@@ -10,6 +10,7 @@ use App\Lib\Db;
 use App\Lib\Ledger;
 use App\Lib\Phone;
 use App\Lib\QrToken;
+use App\Lib\Settings;
 
 class ProfileController {
     public function index(): void {
@@ -59,8 +60,8 @@ class ProfileController {
             'loyalty' => $loyalty,
             'cashback' => $cashback,
             'history' => $history,
-            'review2gis' => config('review_links.2gis_url'),
-            'reviewYandex' => config('review_links.yandex_url'),
+            'review2gis' => Settings::get('review_links.2gis_url', config('review_links.2gis_url', '')),
+            'reviewYandex' => Settings::get('review_links.yandex_url', config('review_links.yandex_url', '')),
         ]);
     }
 

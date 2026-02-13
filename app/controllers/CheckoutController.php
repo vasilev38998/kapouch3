@@ -7,6 +7,8 @@ namespace App\Controllers;
 use App\Lib\Auth;
 use App\Lib\Csrf;
 use App\Lib\Db;
+use App\Lib\Ledger;
+use App\Lib\RulesEngine;
 use App\Lib\TinkoffSbpService;
 
 class CheckoutController {
@@ -83,7 +85,14 @@ class CheckoutController {
         }
 
         $amount = round($amount, 2);
-        $amountKopecks = (int)round($amount * 100);
+
+        $requestedSpend = max(0, (float)($_POST['cashback_spend'] ?? 0));
+        $maxSpendByRule = (new RulesEngine())->cashbackMaxSpend($amount);
+        $balance = (new Ledger())->cashbackBalance((int)$user['id']);
+        $cashbackSpend = round(min($requestedSpend, $maxSpendByRule, $balance), 2);
+        $payable = round(max(0.01, $amount - $cashbackSpend), 2);
+
+        $amountKopecks = (int)round($payable * 100);
         $orderId = 'pwa-' . (int)$user['id'] . '-' . date('YmdHis') . '-' . random_int(1000, 9999);
 
         $baseUrl = rtrim((string)config('app.base_url', ''), '/');
@@ -116,10 +125,13 @@ class CheckoutController {
                 (int)$user['id'],
                 'tinkoff_sbp',
                 $orderId,
-                $amount,
+                $payable,
                 'created',
                 json_encode([
                     'cart' => $lines,
+                    'amount_total' => $amount,
+                    'cashback_spend' => $cashbackSpend,
+                    'amount_payable' => $payable,
                     'payment' => $payment,
                 ], JSON_UNESCAPED_UNICODE),
             ]);
@@ -128,7 +140,9 @@ class CheckoutController {
             'ok' => true,
             'payment_url' => $payment['payment_url'],
             'order_id' => $orderId,
-            'amount' => $amount,
+            'amount' => $payable,
+            'amount_total' => $amount,
+            'cashback_spend' => $cashbackSpend,
         ], JSON_UNESCAPED_UNICODE);
     }
 }

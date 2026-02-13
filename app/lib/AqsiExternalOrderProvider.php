@@ -11,17 +11,17 @@ class AqsiExternalOrderProvider implements ExternalOrderProviderInterface {
             return null;
         }
 
-        $receipt = $this->fetchByPath((string)config('aqsi.receipt_path', '/v1/receipts/{id}'), $externalId, 'receipt');
+        $receipt = $this->fetchByPath((string)Settings::get('aqsi.receipt_path', config('aqsi.receipt_path', '/v1/receipts/{id}')), $externalId, 'receipt');
         if ($receipt) {
             return $receipt;
         }
 
-        return $this->fetchByPath((string)config('aqsi.order_path', '/v1/orders/{id}'), $externalId, 'order');
+        return $this->fetchByPath((string)Settings::get('aqsi.order_path', config('aqsi.order_path', '/v1/orders/{id}')), $externalId, 'order');
     }
 
     private function fetchByPath(string $pathTemplate, string $externalId, string $source): ?array {
-        $baseUrl = rtrim((string)config('aqsi.base_url', ''), '/');
-        $token = (string)config('aqsi.api_token', '');
+        $baseUrl = rtrim((string)Settings::get('aqsi.base_url', config('aqsi.base_url', '')), '/');
+        $token = (string)Settings::get('aqsi.api_token', config('aqsi.api_token', ''));
         if ($baseUrl === '' || $token === '' || $pathTemplate === '') {
             return null;
         }

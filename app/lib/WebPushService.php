@@ -8,8 +8,8 @@ class WebPushService {
     public function isAvailable(): bool {
         return class_exists(\Minishlink\WebPush\WebPush::class)
             && class_exists(\Minishlink\WebPush\Subscription::class)
-            && !empty(config('web_push.public_key'))
-            && !empty(config('web_push.private_key'));
+            && !empty(Settings::get('web_push.public_key', config('web_push.public_key', '')))
+            && !empty(Settings::get('web_push.private_key', config('web_push.private_key', '')));
     }
 
     /**
@@ -24,9 +24,9 @@ class WebPushService {
 
         $auth = [
             'VAPID' => [
-                'subject' => (string)config('web_push.subject', 'mailto:admin@example.com'),
-                'publicKey' => (string)config('web_push.public_key', ''),
-                'privateKey' => (string)config('web_push.private_key', ''),
+                'subject' => (string)Settings::get('web_push.subject', config('web_push.subject', 'mailto:admin@example.com')),
+                'publicKey' => (string)Settings::get('web_push.public_key', config('web_push.public_key', '')),
+                'privateKey' => (string)Settings::get('web_push.private_key', config('web_push.private_key', '')),
             ],
         ];
 

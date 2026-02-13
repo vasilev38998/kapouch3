@@ -1,4 +1,4 @@
-<?php use App\Lib\Auth; use App\Lib\Csrf; $u = Auth::user(); ?>
+<?php use App\Lib\Auth; use App\Lib\Csrf; use App\Lib\Settings; $u = Auth::user(); ?>
 <!doctype html>
 <html lang="ru">
 <head>
@@ -27,7 +27,7 @@
 <main class="container"><?php require $templatePath; ?></main>
 <footer class="footer fade-in">Kapouch · Шелехов, Култукский тракт 25/1</footer>
 <button id="installBtn" class="install-btn" hidden>Установить Kapouch App</button>
-<script>window.CSRF_TOKEN='<?= Csrf::token() ?>';window.APP_BASE='<?= htmlspecialchars(rtrim((string)config('app.base_url',''), '/')) ?>';window.WEB_PUSH_PUBLIC_KEY='<?= htmlspecialchars((string)config('web_push.public_key','')) ?>';</script>
+<script>window.CSRF_TOKEN='<?= Csrf::token() ?>';window.APP_BASE='<?= htmlspecialchars(rtrim((string)config('app.base_url',''), '/')) ?>';window.WEB_PUSH_PUBLIC_KEY='<?= htmlspecialchars((string)Settings::get('web_push.public_key', config('web_push.public_key',''))) ?>';</script>
 <script src="/assets/js/app.js"></script>
 </body>
 </html>
