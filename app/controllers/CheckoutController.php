@@ -96,6 +96,53 @@ class CheckoutController {
         $orderId = 'pwa-' . (int)$user['id'] . '-' . date('YmdHis') . '-' . random_int(1000, 9999);
 
         $baseUrl = rtrim((string)config('app.base_url', ''), '/');
+
+        $receiptEnabled = (string)\App\Lib\Settings::get('tinkoff.receipt_enabled', '1') !== '0';
+        $receipt = null;
+        if ($receiptEnabled) {
+            $vat = (string)\App\Lib\Settings::get('tinkoff.receipt_vat', 'none');
+            $paymentObject = (string)\App\Lib\Settings::get('tinkoff.receipt_payment_object', 'service');
+            $paymentMethod = (string)\App\Lib\Settings::get('tinkoff.receipt_payment_method', 'full_payment');
+            $taxation = (string)\App\Lib\Settings::get('tinkoff.receipt_taxation', 'usn_income');
+            $customerEmail = trim((string)\App\Lib\Settings::get('tinkoff.receipt_email', ''));
+            $customerPhone = trim((string)($user['phone'] ?? ''));
+
+            $payableKopecks = max(1, (int)round($payable * 100));
+            $sumLines = max(1, (int)round($amount * 100));
+            $built = [];
+            $acc = 0;
+            foreach ($lines as $i => $line) {
+                $lineKop = max(1, (int)round(((float)$line['sum']) * 100));
+                $scaled = (int)floor($lineKop * $payableKopecks / $sumLines);
+                if ($scaled < 1) $scaled = 1;
+                if ($i === count($lines) - 1) {
+                    $scaled = max(1, $payableKopecks - $acc);
+                }
+                $acc += $scaled;
+                $qty = max(1, (int)$line['qty']);
+                $priceKop = (int)max(1, round($scaled / $qty));
+                $built[] = [
+                    'Name' => mb_substr((string)$line['name'], 0, 128),
+                    'Price' => $priceKop,
+                    'Quantity' => (float)$qty,
+                    'Amount' => $scaled,
+                    'Tax' => $vat,
+                    'PaymentMethod' => $paymentMethod,
+                    'PaymentObject' => $paymentObject,
+                ];
+            }
+
+            $receipt = [
+                'Taxation' => $taxation,
+                'Items' => $built,
+            ];
+            if ($customerEmail !== '') {
+                $receipt['Email'] = $customerEmail;
+            } elseif ($customerPhone !== '') {
+                $receipt['Phone'] = $customerPhone;
+            }
+        }
+
         $service = new TinkoffSbpService();
         $payment = $service->createSbpPayment([
             'amount_kopecks' => $amountKopecks,
@@ -105,6 +152,7 @@ class CheckoutController {
             'fail_url' => $baseUrl . '/menu',
             'notification_url' => $baseUrl . '/api/payments/tinkoff/notify',
             'customer_key' => 'user-' . (int)$user['id'],
+            'receipt' => $receipt,
         ]);
 
         if (empty($payment['ok']) || empty($payment['payment_url'])) {

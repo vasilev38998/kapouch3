@@ -183,9 +183,17 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
    - `tinkoff.base_url` (обычно `https://securepay.tinkoff.ru/v2`)
    - `tinkoff.terminal_key`
    - `tinkoff.password`
+   - `tinkoff.receipt_enabled` (1/0, для Т‑Чеков)
+   - `tinkoff.receipt_taxation` (например `usn_income`)
+   - `tinkoff.receipt_vat` (например `none`)
+   - `tinkoff.receipt_payment_object`
+   - `tinkoff.receipt_payment_method`
+   - `tinkoff.receipt_email` (если не хотите передавать телефон клиента)
 2. Пользователь открывает `/menu`, добавляет позиции в корзину и жмёт `Оплатить через СБП Т‑Банк`.
 3. Бэкенд пересчитывает сумму по актуальным ценам `menu_items`, создаёт платёж через `Init` и возвращает ссылку оплаты.
 4. Клиент перенаправляется на платёжную страницу СБП.
+
+5. Если у вас включены Т‑Чеки, backend теперь отправляет объект `Receipt` в `Init` (позиции, налогообложение, НДС, метод/предмет расчёта).
 
 Технически:
 - endpoint: `POST /api/checkout/sbp`;

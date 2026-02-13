@@ -73,6 +73,13 @@ class AdminController {
             'tinkoff.terminal_key' => ['label' => 'Т‑Банк Terminal Key', 'default' => (string)config('tinkoff.terminal_key', '')],
             'tinkoff.password' => ['label' => 'Т‑Банк Password', 'default' => (string)config('tinkoff.password', '')],
 
+            'tinkoff.receipt_enabled' => ['label' => 'Т‑Чеки включены (1/0)', 'default' => '1'],
+            'tinkoff.receipt_taxation' => ['label' => 'Т‑Чеки Taxation', 'default' => 'usn_income'],
+            'tinkoff.receipt_vat' => ['label' => 'Т‑Чеки НДС (none/vat10/vat20...)', 'default' => 'none'],
+            'tinkoff.receipt_payment_object' => ['label' => 'Т‑Чеки PaymentObject', 'default' => 'service'],
+            'tinkoff.receipt_payment_method' => ['label' => 'Т‑Чеки PaymentMethod', 'default' => 'full_payment'],
+            'tinkoff.receipt_email' => ['label' => 'Т‑Чеки Email магазина/клиента', 'default' => ''],
+
             'aqsi.base_url' => ['label' => 'AQSI API URL', 'default' => (string)config('aqsi.base_url', '')],
             'aqsi.api_token' => ['label' => 'AQSI API Token', 'default' => (string)config('aqsi.api_token', '')],
             'aqsi.receipt_path' => ['label' => 'AQSI путь чека', 'default' => (string)config('aqsi.receipt_path', '/v1/receipts/{id}')],

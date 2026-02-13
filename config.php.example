@@ -33,6 +33,12 @@ return [
         'base_url' => 'https://securepay.tinkoff.ru/v2',
         'terminal_key' => '',
         'password' => '',
+        'receipt_enabled' => '1',
+        'receipt_taxation' => 'usn_income',
+        'receipt_vat' => 'none',
+        'receipt_payment_object' => 'service',
+        'receipt_payment_method' => 'full_payment',
+        'receipt_email' => '',
     ],
     'sms_ru' => [
         'api_id' => 'sms_ru_api_id',

@@ -28,6 +28,9 @@ class TinkoffSbpService {
         if (!empty($payload['customer_key'])) {
             $request['CustomerKey'] = (string)$payload['customer_key'];
         }
+        if (!empty($payload['receipt']) && is_array($payload['receipt'])) {
+            $request['Receipt'] = $payload['receipt'];
+        }
 
         $request['Token'] = $this->sign($request, $password);
 
