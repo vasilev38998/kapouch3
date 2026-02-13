@@ -24,12 +24,6 @@ return [
         'password' => 'db_password',
         'charset' => 'utf8mb4',
     ],
-
-    'web_push' => [
-        'public_key' => '',
-        'private_key' => '',
-        'subject' => 'mailto:admin@example.com',
-    ],
     'aqsi' => [
         'base_url' => 'https://api.aqsi.ru',
         'api_token' => '',

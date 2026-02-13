@@ -29,42 +29,45 @@ function initAnimations() {
   document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
 }
 
-function showInAppFeed(messages = []) {
+function showInAppFeed(items = []) {
   const widget = document.querySelector('[data-reward-available]');
   const feed = document.getElementById('inAppFeed');
   if (!feed) return;
 
-  const list = [...messages];
-  if (widget && widget.getAttribute('data-reward-available') === '1') list.push('🎁 У вас доступна награда — можно списать бесплатный кофе.');
-  if (!localStorage.getItem('feed_seen')) list.push('📲 Закрепите приложение Kapouch на главном экране.');
-
-  if (list.length) {
-    feed.hidden = false;
-    const uniq = Array.from(new Set(list)).slice(0, 8);
-    const markAll = '<button id="feedMarkRead" class="btn ghost" style="margin:8px 0">Отметить уведомления прочитанными</button>';
-    feed.innerHTML = '<h3>Лента</h3>' + markAll + uniq.map((m) => `<div>${m}</div>`).join('');
-    const btn = document.getElementById('feedMarkRead');
-    btn?.addEventListener('click', () => {
-      fetch('/api/notifications/read-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ _csrf: window.CSRF_TOKEN }).toString()
-      }).then(() => {
-        btn.textContent = 'Готово ✅';
-        btn.disabled = true;
-      }).catch(() => {});
-    });
+  const notifications = Array.isArray(items) ? items.filter(Boolean).slice(0, 12) : [];
+  if (widget && widget.getAttribute('data-reward-available') === '1') {
+    notifications.unshift({ title: 'Награда доступна', body: 'Можно списать бесплатный кофе 🎁', system: true });
   }
-  localStorage.setItem('feed_seen', '1');
-  feed.addEventListener('click', (e) => {
-    const a = e.target.closest('a[data-notif-id]');
-    if (!a) return;
-    fetch('/api/notifications/click', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: a.getAttribute('data-notif-id') || '' }).toString()
-    }).catch(() => {});
-  });
+
+  if (!notifications.length) {
+    feed.hidden = true;
+    feed.innerHTML = '';
+    return;
+  }
+
+  feed.hidden = false;
+  const cards = notifications.map((item) => {
+    const id = item.id ? String(item.id) : '';
+    const title = item.title || 'Уведомление';
+    const body = item.body || '';
+    const image = item.image || '';
+    const ts = item.created_at || '';
+    const readButton = item.system ? '' : `<button class="btn ghost" data-mark-read="${id}">Прочитано</button>`;
+    const imageHtml = image ? `<img class="notif-image" src="${image}" alt="notification">` : '';
+    return `<article class="notif-card ${item.system ? 'notif-system' : ''}" data-notif-id="${id}">
+      ${imageHtml}
+      <div class="notif-content">
+        <strong>${title}</strong>
+        <p>${body}</p>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <small class="muted">${ts}</small>
+          ${readButton}
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+
+  feed.innerHTML = `<h3>Уведомления</h3><div class="notif-grid">${cards}</div>`;
 }
 
 
@@ -370,6 +373,22 @@ function initStaffLiveOrders() {
   const status = document.getElementById('liveOrdersStatus');
   if (!feed || !status) return;
 
+  let knownIds = new Set();
+
+  const beep = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 860;
+      g.gain.value = 0.02;
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      setTimeout(() => { o.stop(); ctx.close(); }, 180);
+    } catch {}
+  };
+
   const render = (items = []) => {
     if (!items.length) {
       feed.innerHTML = '<div class="card muted">Пока нет заказов.</div>';
@@ -408,8 +427,13 @@ function initStaffLiveOrders() {
         status.textContent = 'Ошибка данных';
         return;
       }
+      const items = data.items || [];
+      const nextIds = new Set(items.map((item) => String(item.id)));
+      const hasNew = Array.from(nextIds).some((id) => !knownIds.has(id));
+      if (hasNew && knownIds.size > 0) beep();
+      knownIds = nextIds;
       status.textContent = `Онлайн · ${new Date().toLocaleTimeString()}`;
-      render(data.items || []);
+      render(items);
     } catch {
       status.textContent = 'Нет соединения';
     }
@@ -461,99 +485,49 @@ function initPhoneMask() {
   });
 }
 
-async function initPushNotifications() {
-  const authPage = window.location.pathname.startsWith('/auth');
-  if (authPage || !('Notification' in window)) return;
+async function initProfileNotifications() {
+  const feed = document.getElementById('inAppFeed');
+  if (!feed) return;
 
-  if (Notification.permission === 'default') {
-    try { await Notification.requestPermission(); } catch {}
-  }
-
-    const publicKey = window.WEB_PUSH_PUBLIC_KEY || '';
-  const hasPushManager = ('serviceWorker' in navigator) && ('PushManager' in window) && publicKey;
-
-  const subscribeFallback = async () => {
-    let deviceId = localStorage.getItem('push_device_id');
-    if (!deviceId) {
-      deviceId = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      localStorage.setItem('push_device_id', deviceId);
-    }
-    await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, endpoint: `fallback-${deviceId}`, permission: Notification.permission }).toString()
-    });
+  const markRead = async (id) => {
+    if (!id) return;
+    try {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: String(id) }).toString(),
+      });
+    } catch {}
   };
 
-  const urlBase64ToUint8Array = (base64String) => {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-    return outputArray;
-  };
+  feed.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-mark-read]');
+    if (!btn) return;
+    await markRead(btn.getAttribute('data-mark-read'));
+    btn.textContent = 'Прочитано ✅';
+    btn.disabled = true;
+  });
 
-  try {
-    if (hasPushManager) {
-      const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub && Notification.permission === 'granted') {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey)
-        });
-      }
-      if (sub) {
-        const json = sub.toJSON();
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ _csrf: window.CSRF_TOKEN, permission: Notification.permission, ...json })
-        });
-      } else {
-        await subscribeFallback();
-      }
-    } else {
-      await subscribeFallback();
-    }
-  } catch {
-    try { await subscribeFallback(); } catch {}
-  }
-
-  const delivered = new Set(JSON.parse(localStorage.getItem('notified_ids') || '[]'));
-  const poll = async () => {
+  const load = async () => {
     try {
       const res = await fetch('/api/notifications/poll', { credentials: 'same-origin' });
       if (!res.ok) return;
       const data = await res.json();
-      const feedMessages = [];
-      for (const item of (data.items || [])) {
-        const msg = item.url ? `🔔 <a data-notif-id="${item.id}" href="${item.url}">${item.title}</a>: ${item.body}` : `🔔 ${item.title}: ${item.body}`;
-        feedMessages.push(msg);
-        if (!delivered.has(item.id) && Notification.permission === 'granted') {
-          const note = new Notification(item.title, { body: item.body });
-          if (item.url) {
-            note.onclick = () => {
-              window.focus();
-              fetch('/api/notifications/click', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ _csrf: window.CSRF_TOKEN, id: String(item.id) }).toString()
-              }).catch(() => {});
-              window.location.href = item.url;
-            };
-          }
-          delivered.add(item.id);
-        }
-      }
-      localStorage.setItem('notified_ids', JSON.stringify(Array.from(delivered).slice(-200)));
-      if (feedMessages.length) showInAppFeed(feedMessages.slice(0, 5));
+      const items = (data.items || []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        image: item.url || '',
+        created_at: item.created_at || '',
+      }));
+      showInAppFeed(items);
     } catch {}
   };
-  poll();
-  setInterval(poll, 30000);
+
+  await load();
+  setInterval(load, 20000);
 }
+
 
 async function initCameraScan() {
   const video = document.getElementById('scanVideo');
@@ -599,5 +573,5 @@ initMenuCart();
 initAqsiSync();
 initStaffLiveOrders();
 initPhoneMask();
-initPushNotifications();
+initProfileNotifications();
 initCameraScan();

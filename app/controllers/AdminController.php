@@ -10,7 +10,6 @@ use App\Lib\Csrf;
 use App\Lib\CsvExport;
 use App\Lib\Db;
 use App\Lib\Settings;
-use App\Lib\WebPushService;
 use PDO;
 
 class AdminController {
@@ -26,11 +25,10 @@ class AdminController {
         $health = [
             'otp_24h' => (int)$pdo->query('SELECT COUNT(*) FROM otp_requests WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)')->fetchColumn(),
             'otp_fail_24h' => (int)$pdo->query("SELECT COUNT(*) FROM otp_requests WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sms_status IS NOT NULL AND sms_status NOT IN ('ok','OK')")->fetchColumn(),
-            'push_sent_7d' => (int)$pdo->query("SELECT COUNT(*) FROM push_campaigns WHERE (sent_at IS NOT NULL AND sent_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) OR (sent_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))")->fetchColumn(),
-            'push_clicks_7d' => (int)$pdo->query('SELECT COALESCE(SUM(clicks_count),0) FROM push_campaigns WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)')->fetchColumn(),
+            'notifications_7d' => (int)$pdo->query("SELECT COUNT(*) FROM user_notifications WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn(),
+            'notifications_read_7d' => (int)$pdo->query("SELECT COUNT(*) FROM user_notifications WHERE is_read=1 AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn(),
             'unread_notifs' => (int)$pdo->query('SELECT COUNT(*) FROM user_notifications WHERE is_read=0')->fetchColumn(),
             'menu_sold_out' => (int)$pdo->query('SELECT COUNT(*) FROM menu_items WHERE is_active=1 AND is_sold_out=1')->fetchColumn(),
-            'push_granted_subs' => (int)$pdo->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='granted' AND is_active=1")->fetchColumn(),
         ];
         $recentUsers = $pdo->query('SELECT id,phone,role,created_at FROM users ORDER BY id DESC LIMIT 8')->fetchAll();
         view('admin/dashboard', ['stats' => $stats, 'health' => $health, 'recentUsers' => $recentUsers]);
@@ -86,9 +84,6 @@ class AdminController {
             'aqsi.receipt_path' => ['label' => 'AQSI путь чека', 'default' => (string)config('aqsi.receipt_path', '/v1/receipts/{id}')],
             'aqsi.order_path' => ['label' => 'AQSI fallback путь заказа', 'default' => (string)config('aqsi.order_path', '/v1/orders/{id}')],
 
-            'web_push.public_key' => ['label' => 'Web Push Public Key', 'default' => (string)config('web_push.public_key', '')],
-            'web_push.private_key' => ['label' => 'Web Push Private Key', 'default' => (string)config('web_push.private_key', '')],
-            'web_push.subject' => ['label' => 'Web Push Subject', 'default' => (string)config('web_push.subject', '')],
         ];
     }
 
@@ -203,7 +198,7 @@ class AdminController {
                     $recipients = $this->dispatchCampaign($campaignId);
                     Db::pdo()->prepare('UPDATE push_campaigns SET recipients_count=? WHERE id=?')->execute([$recipients, $campaignId]);
                 }
-                Audit::log((int)Auth::user()['id'], 'push_send', 'push_campaign', $campaignId, 'ok', 'audience=' . $audience . '; status=' . $status);
+                Audit::log((int)Auth::user()['id'], 'profile_notification_send', 'push_campaign', $campaignId, 'ok', 'audience=' . $audience . '; status=' . $status);
             }
             redirect('/admin/push');
         }
@@ -211,13 +206,8 @@ class AdminController {
         $this->dispatchScheduledCampaigns();
         $campaigns = Db::pdo()->query("SELECT c.*, COALESCE(SUM(CASE WHEN n.is_read=1 THEN 1 ELSE 0 END),0) AS read_count, COALESCE(COUNT(n.id),0) AS sent_count FROM push_campaigns c LEFT JOIN user_notifications n ON n.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC LIMIT 80")->fetchAll();
         $templates = Db::pdo()->query('SELECT * FROM push_templates WHERE is_active=1 ORDER BY id DESC LIMIT 30')->fetchAll();
-        $subs = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn();
-        $subsActive15m = (int)Db::pdo()->query('SELECT COUNT(*) FROM push_subscriptions WHERE last_seen_at IS NOT NULL AND last_seen_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)')->fetchColumn();
-        $subsGranted = (int)Db::pdo()->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='granted'")->fetchColumn();
-        $subsDenied = (int)Db::pdo()->query("SELECT COUNT(*) FROM push_subscriptions WHERE permission='denied'")->fetchColumn();
         $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
-        $webPushAvailable = (new WebPushService())->isAvailable();
-        view('admin/push', ['campaigns' => $campaigns, 'subscriptions' => $subs, 'subscriptionsActive15m' => $subsActive15m, 'subscriptionsGranted' => $subsGranted, 'subscriptionsDenied' => $subsDenied, 'webPushAvailable' => $webPushAvailable, 'audienceStats' => $audienceStats, 'templates' => $templates]);
+        view('admin/push', ['campaigns' => $campaigns, 'audienceStats' => $audienceStats, 'templates' => $templates]);
     }
 
     private function dispatchScheduledCampaigns(): void {
@@ -245,31 +235,6 @@ class AdminController {
         $ins = Db::pdo()->prepare($sql);
         $ins->execute($params);
         $rowsInserted = (int)$ins->rowCount();
-
-        $subSql = "SELECT s.id, s.endpoint, s.p256dh, s.auth, s.content_encoding, s.user_id FROM push_subscriptions s INNER JOIN users u ON u.id=s.user_id WHERE s.is_active=1 AND s.permission='granted' AND s.endpoint IS NOT NULL";
-        $subParams = [];
-        if ($roleFilter !== 'all') {
-            $subSql .= ' AND u.role=?';
-            $subParams[] = $roleFilter;
-        }
-        $subStmt = Db::pdo()->prepare($subSql);
-        $subStmt->execute($subParams);
-        $subs = $subStmt->fetchAll();
-
-        $webPush = new WebPushService();
-        if (!empty($subs)) {
-            $result = $webPush->sendToSubscriptions($subs, [
-                'title' => (string)$c['title'],
-                'body' => (string)$c['body'],
-                'url' => (string)($c['url'] ?? '/profile'),
-                'campaignId' => (int)$campaignId,
-            ]);
-            if (($result['failed'] ?? 0) > 0 && !$webPush->isAvailable()) {
-                Db::pdo()->prepare("UPDATE push_subscriptions SET last_error=? WHERE permission='granted'")->execute(['web-push dependency or VAPID keys are missing']);
-            } elseif (($result['sent'] ?? 0) > 0) {
-                Db::pdo()->prepare("UPDATE push_subscriptions SET last_success_at=NOW(), last_error=NULL WHERE permission='granted'")->execute();
-            }
-        }
 
         return $rowsInserted;
     }

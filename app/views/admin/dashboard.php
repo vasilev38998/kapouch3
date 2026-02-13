@@ -13,8 +13,8 @@
 <section class="card kpi-grid fade-in">
   <div><small>OTP за 24ч</small><strong><?= (int)($health['otp_24h'] ?? 0) ?></strong></div>
   <div><small>OTP ошибок 24ч</small><strong><?= (int)($health['otp_fail_24h'] ?? 0) ?></strong></div>
-  <div><small>Push кампаний 7д</small><strong><?= (int)($health['push_sent_7d'] ?? 0) ?></strong></div>
-  <div><small>Push кликов 7д</small><strong><?= (int)($health['push_clicks_7d'] ?? 0) ?></strong></div>
+  <div><small>Уведомлений 7д</small><strong><?= (int)($health['notifications_7d'] ?? 0) ?></strong></div>
+  <div><small>Прочитано уведомлений 7д</small><strong><?= (int)($health['notifications_read_7d'] ?? 0) ?></strong></div>
   <div><small>Непрочитанных уведомлений</small><strong><?= (int)($health['unread_notifs'] ?? 0) ?></strong></div>
   <div><small>Позиции в стоп-листе</small><strong><?= (int)($health['menu_sold_out'] ?? 0) ?></strong></div>
 </section>
@@ -27,7 +27,7 @@
     <a class="btn" href="/admin/promocodes">Промокоды</a>
     <a class="btn" href="/admin/missions">Миссии</a>
     <a class="btn" href="/admin/menu">Меню</a>
-    <a class="btn" href="/admin/push">Push</a>
+    <a class="btn" href="/admin/push">Уведомления</a>
     <a class="btn" href="/admin/data">Data manager</a>
     <a class="btn" href="/admin/exports">Отчёты</a>
     <a class="btn" href="/admin/audit">Аудит</a>

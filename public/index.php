@@ -103,7 +103,6 @@ $routes = [
         '/admin/push' => [AdminController::class, 'push'],
         '/admin/data/save' => [AdminController::class, 'dataSave'],
 
-        '/api/push/subscribe' => [NotificationController::class, 'subscribe'],
         '/api/notifications/read' => [NotificationController::class, 'read'],
         '/api/notifications/click' => [NotificationController::class, 'click'],
         '/api/notifications/read-all' => [NotificationController::class, 'readAll'],

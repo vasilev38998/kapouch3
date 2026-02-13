@@ -46,39 +46,3 @@ self.addEventListener('fetch', (event) => {
     )
   );
 });
-
-self.addEventListener('push', (event) => {
-  let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch {
-    data = { title: 'Kapouch', body: event.data ? event.data.text() : '' };
-  }
-
-  const title = data.title || 'Kapouch';
-  const body = data.body || 'Новое уведомление';
-  const url = data.url || '/profile';
-
-  event.waitUntil(self.registration.showNotification(title, {
-    body,
-    data: { url },
-    icon: '/assets/icons/icon-192.svg',
-    badge: '/assets/icons/icon-192.svg'
-  }));
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const targetUrl = event.notification.data?.url || '/profile';
-
-  event.waitUntil((async () => {
-    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of allClients) {
-      if ('focus' in client) {
-        client.navigate(targetUrl);
-        return client.focus();
-      }
-    }
-    if (clients.openWindow) return clients.openWindow(targetUrl);
-  })());
-});
