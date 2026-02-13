@@ -13,6 +13,13 @@
     <label class="fav-filter"><input type="checkbox" id="favoritesToggle" style="width:auto"> Только избранное</label>
     <button class="btn">Применить</button>
   </form>
+
+  <div class="row" style="margin-top:8px;align-items:center">
+    <label style="flex:1">Поиск по меню
+      <input id="menuSearch" type="search" placeholder="Например: капучино, десерт...">
+    </label>
+    <button class="btn ghost" type="button" id="menuRestoreLast" title="Быстро восстановить прошлую корзину">Повторить прошлый заказ</button>
+  </div>
   <div id="favoritesSummary" class="favorites-summary muted">Добавляйте любимые позиции в избранное, чтобы не искать их каждый раз.</div>
 </section>
 <section class="card" id="menuCart" data-menu-cart>
@@ -42,7 +49,7 @@
     <div class="card">Пока нет доступных позиций меню по выбранным фильтрам.</div>
   <?php endif; ?>
   <?php foreach ($filtered as $item): ?>
-    <article class="card menu-card" data-menu-item data-menu-id="<?= (int)$item['id'] ?>" data-menu-name="<?= htmlspecialchars((string)$item['name']) ?>" data-menu-price="<?= number_format((float)$item['price'], 2, '.', '') ?>">
+    <article class="card menu-card" data-menu-item data-menu-id="<?= (int)$item['id'] ?>" data-menu-name="<?= htmlspecialchars((string)$item['name']) ?>" data-menu-price="<?= number_format((float)$item['price'], 2, '.', '') ?>" data-menu-category="<?= htmlspecialchars((string)$item['category']) ?>" data-menu-description="<?= htmlspecialchars((string)($item['description'] ?? '')) ?>">
       <?php if (!empty($item['image_url'])): ?>
         <img src="<?= htmlspecialchars((string)$item['image_url']) ?>" alt="<?= htmlspecialchars((string)$item['name']) ?>" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-bottom:8px">
       <?php endif; ?>

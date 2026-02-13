@@ -29,6 +29,17 @@ function initAnimations() {
   document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
 }
 
+function initBottomNavActive() {
+  const path = window.location.pathname || '/';
+  document.querySelectorAll('.bottom-nav a').forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    const active = href !== '/' && (path === href || path.startsWith(href + '/'));
+    a.classList.toggle('is-active', active);
+  });
+}
+
+
+
 function showInAppFeed(items = []) {
   const widget = document.querySelector('[data-reward-available]');
   const feed = document.getElementById('inAppFeed');
@@ -242,6 +253,30 @@ function initAqsiSync() {
 }
 
 
+function initMenuSearch() {
+  const input = document.getElementById('menuSearch');
+  const cards = Array.from(document.querySelectorAll('[data-menu-item]'));
+  if (!input || !cards.length) return;
+
+  let t;
+  const apply = () => {
+    const q = (input.value || '').trim().toLowerCase();
+    cards.forEach((card) => {
+      const text = [
+        card.dataset.menuName || '',
+        card.dataset.menuCategory || '',
+        card.dataset.menuDescription || ''
+      ].join(' ').toLowerCase();
+      card.classList.toggle('is-search-hidden', q !== '' && !text.includes(q));
+    });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(apply, 120);
+  });
+}
+
 function initMenuCart() {
   const cards = Array.from(document.querySelectorAll('[data-menu-item]'));
   const cartRoot = document.querySelector('[data-menu-cart]');
@@ -255,6 +290,8 @@ function initMenuCart() {
   const spendInput = document.getElementById('menuCashbackSpend');
   const spendHint = document.getElementById('menuCashbackHint');
   const storageKey = 'menu_cart_v1';
+  const lastOrderKey = 'menu_last_paid_order_v1';
+  const restoreBtn = document.getElementById('menuRestoreLast');
   const cart = new Map(Object.entries(JSON.parse(localStorage.getItem(storageKey) || '{}')).map(([k,v]) => [k, Number(v) || 0]));
 
   const save = () => {
@@ -312,6 +349,22 @@ function initMenuCart() {
     });
   });
 
+
+  restoreBtn?.addEventListener('click', () => {
+    const saved = JSON.parse(localStorage.getItem(lastOrderKey) || '{}');
+    if (!saved || typeof saved !== 'object' || !saved.items) {
+      if (status) status.textContent = 'Нет предыдущего заказа для повторения.';
+      return;
+    }
+    Object.entries(saved.items).forEach(([id, qty]) => {
+      cart.set(String(id), Math.max(0, Math.min(20, Number(qty) || 0)));
+    });
+    if (spendInput && typeof saved.cashback_spend !== 'undefined') {
+      spendInput.value = String(saved.cashback_spend);
+    }
+    if (status) status.textContent = 'Прошлая корзина восстановлена.';
+    render();
+  });
   clearBtn?.addEventListener('click', () => {
     cart.clear();
     render();
@@ -354,6 +407,9 @@ function initMenuCart() {
         return;
       }
       if (status) status.textContent = `К оплате: ${data.amount} ₽ (списано кэшбэка: ${data.cashback_spend || 0} ₽)`;
+      const snapshot = {};
+      cart.forEach((qty, id) => { if (qty > 0) snapshot[id] = qty; });
+      localStorage.setItem(lastOrderKey, JSON.stringify({ items: snapshot, cashback_spend: Number(spendInput?.value || 0), saved_at: new Date().toISOString() }));
       window.location.href = data.payment_url;
     } catch {
       if (status) status.textContent = 'Ошибка сети при создании платежа.';
@@ -566,9 +622,11 @@ async function initCameraScan() {
 }
 
 initAnimations();
+initBottomNavActive();
 showInAppFeed();
 initCopyButtons();
 initMenuFavorites();
+initMenuSearch();
 initMenuCart();
 initAqsiSync();
 initStaffLiveOrders();

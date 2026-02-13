@@ -73,3 +73,7 @@ body{background:radial-gradient(1200px 600px at 10% -20%,var(--bg-glow),transpar
 .bottom-nav a:hover{background:#fff;transform:translateY(-1px)}
 .install-btn{bottom:86px}
 @media (min-width:900px){.bottom-nav{left:50%;transform:translateX(-50%);max-width:760px;border-radius:16px 16px 0 0}.has-bottom-nav{padding-bottom:110px}}
+
+.bottom-nav a.is-active{background:linear-gradient(135deg,var(--brown),#9f5f44);color:#fff;box-shadow:0 8px 18px rgba(74,45,37,.22)}
+.is-search-hidden{display:none !important}
+#menuRestoreLast{white-space:nowrap}
