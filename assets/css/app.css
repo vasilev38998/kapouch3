@@ -77,3 +77,11 @@ body{background:radial-gradient(1200px 600px at 10% -20%,var(--bg-glow),transpar
 .bottom-nav a.is-active{background:linear-gradient(135deg,var(--brown),#9f5f44);color:#fff;box-shadow:0 8px 18px rgba(74,45,37,.22)}
 .is-search-hidden{display:none !important}
 #menuRestoreLast{white-space:nowrap}
+
+.menu-engagement{position:relative;overflow:hidden}
+.menu-engagement:after{content:'';position:absolute;right:-30px;top:-30px;width:120px;height:120px;background:radial-gradient(circle,#ffe7a2,transparent 70%)}
+.lucky-pick{outline:2px solid #e0b257;box-shadow:0 0 0 4px rgba(255,212,42,.25),0 14px 28px rgba(120,78,45,.18)}
+.theme-dark body{background:#1d1714;color:#f5e8dc}
+.theme-dark .card,.theme-dark .bottom-nav a{background:rgba(43,33,29,.92);color:#f7e8d7;border-color:#6e4f3f}
+.theme-dark .topbar,.theme-dark .bottom-nav{background:linear-gradient(180deg,rgba(55,42,36,.95),rgba(35,26,23,.98))}
+.theme-dark input,.theme-dark select,.theme-dark textarea{background:#2f241f;color:#f8e8d7;border-color:#7f5c47}

@@ -40,6 +40,10 @@ function initBottomNavActive() {
 
 
 
+function triggerHaptic(pattern = 8) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+}
+
 function showInAppFeed(items = []) {
   const widget = document.querySelector('[data-reward-available]');
   const feed = document.getElementById('inAppFeed');
@@ -253,28 +257,122 @@ function initAqsiSync() {
 }
 
 
+function initEngagementFeatures() {
+  const streakEl = document.getElementById('streakValue');
+  const bonusEl = document.getElementById('dailyBonusValue');
+  const bonusBtn = document.getElementById('dailyBonusBtn');
+  const hint = document.getElementById('engagementHint');
+  const themeBtn = document.getElementById('themeToggleBtn');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const streakKey = 'engagement_streak_v1';
+  const bonusKey = 'daily_bonus_claim_v1';
+  const streakData = JSON.parse(localStorage.getItem(streakKey) || '{}');
+
+  const prev = streakData.last_date || '';
+  let streak = Number(streakData.count || 0);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (prev !== today) {
+    if (prev === yesterday) streak += 1;
+    else streak = 1;
+    localStorage.setItem(streakKey, JSON.stringify({ last_date: today, count: streak }));
+  }
+  if (streakEl) streakEl.textContent = String(streak);
+
+  const bonusData = JSON.parse(localStorage.getItem(bonusKey) || '{}');
+  const bonuses = ['+5% кэшбэка на день', 'Бесплатный сироп', 'Секретная позиция -10%', 'Двойные штампы'];
+  const claimedToday = bonusData.date === today;
+  if (bonusEl) bonusEl.textContent = claimedToday ? (bonusData.bonus || 'получен') : 'не открыт';
+  bonusBtn?.addEventListener('click', () => {
+    if (claimedToday) {
+      if (hint) hint.textContent = `Сегодня бонус уже получен: ${bonusData.bonus}`;
+      return;
+    }
+    const bonus = bonuses[Math.floor(Math.random() * bonuses.length)];
+    localStorage.setItem(bonusKey, JSON.stringify({ date: today, bonus }));
+    if (bonusEl) bonusEl.textContent = bonus;
+    if (hint) hint.textContent = `Бонус дня: ${bonus}. Покажите бариста экран профиля.`;
+    triggerHaptic([20, 30, 20]);
+  });
+
+  const themeKey = 'kapouch_theme';
+  const applyTheme = () => {
+    const t = localStorage.getItem(themeKey) || 'light';
+    document.documentElement.classList.toggle('theme-dark', t === 'dark');
+  };
+  applyTheme();
+  themeBtn?.addEventListener('click', () => {
+    const curr = localStorage.getItem(themeKey) || 'light';
+    localStorage.setItem(themeKey, curr === 'light' ? 'dark' : 'light');
+    applyTheme();
+  });
+}
+
+function initLuckyAndRecentMenu() {
+  const cards = Array.from(document.querySelectorAll('[data-menu-item]'));
+  if (!cards.length) return;
+  const luckyEl = document.getElementById('luckyPickHint');
+  const recentEl = document.getElementById('recentMenuView');
+  const luckyIdx = Math.floor((Date.now() / 86400000)) % cards.length;
+  const luckyCard = cards[luckyIdx];
+  if (luckyCard) {
+    luckyCard.classList.add('lucky-pick');
+    if (luckyEl) luckyEl.textContent = `🎯 Лаки-позиция дня: ${luckyCard.dataset.menuName || 'выбрано'}`;
+  }
+  const recentKey = 'recent_menu_items_v1';
+  const saveRecent = (id, name) => {
+    const arr = JSON.parse(localStorage.getItem(recentKey) || '[]').filter((r) => r.id !== id);
+    arr.unshift({ id, name });
+    localStorage.setItem(recentKey, JSON.stringify(arr.slice(0, 5)));
+    renderRecent();
+  };
+  const renderRecent = () => {
+    if (!recentEl) return;
+    const arr = JSON.parse(localStorage.getItem(recentKey) || '[]');
+    if (!arr.length) {
+      recentEl.textContent = 'Вы еще не просматривали позиции — выберите что-нибудь интересное.';
+      return;
+    }
+    recentEl.innerHTML = 'Недавно смотрели: ' + arr.map((x) => `<span class="chip">${x.name}</span>`).join(' ');
+  };
+  cards.forEach((card) => {
+    card.addEventListener('click', () => {
+      saveRecent(String(card.dataset.menuId || ''), card.dataset.menuName || 'Позиция');
+    });
+  });
+  renderRecent();
+}
+
 function initMenuSearch() {
   const input = document.getElementById('menuSearch');
+  const minPrice = document.getElementById('menuMinPrice');
+  const maxPrice = document.getElementById('menuMaxPrice');
   const cards = Array.from(document.querySelectorAll('[data-menu-item]'));
-  if (!input || !cards.length) return;
+  if (!cards.length || (!input && !minPrice && !maxPrice)) return;
 
   let t;
   const apply = () => {
-    const q = (input.value || '').trim().toLowerCase();
+    const q = ((input?.value) || '').trim().toLowerCase();
+    const min = Number(minPrice?.value || 0);
+    const max = Number(maxPrice?.value || 0);
     cards.forEach((card) => {
       const text = [
         card.dataset.menuName || '',
         card.dataset.menuCategory || '',
         card.dataset.menuDescription || ''
       ].join(' ').toLowerCase();
-      card.classList.toggle('is-search-hidden', q !== '' && !text.includes(q));
+      const price = Number(card.dataset.menuPrice || 0);
+      const byText = q === '' || text.includes(q);
+      const byMin = !min || price >= min;
+      const byMax = !max || price <= max;
+      card.classList.toggle('is-search-hidden', !(byText && byMin && byMax));
     });
   };
 
-  input.addEventListener('input', () => {
-    clearTimeout(t);
-    t = setTimeout(apply, 120);
-  });
+  const onInput = () => { clearTimeout(t); t = setTimeout(apply, 120); };
+  input?.addEventListener('input', onInput);
+  minPrice?.addEventListener('input', onInput);
+  maxPrice?.addEventListener('input', onInput);
 }
 
 function initMenuCart() {
@@ -289,6 +387,9 @@ function initMenuCart() {
   const status = document.getElementById('menuPayStatus');
   const spendInput = document.getElementById('menuCashbackSpend');
   const spendHint = document.getElementById('menuCashbackHint');
+  const etaHint = document.getElementById('menuEtaHint');
+  const shareBtn = document.getElementById('menuCartShare');
+  const upsell = document.getElementById('menuUpsell');
   const storageKey = 'menu_cart_v1';
   const lastOrderKey = 'menu_last_paid_order_v1';
   const restoreBtn = document.getElementById('menuRestoreLast');
@@ -337,10 +438,12 @@ function initMenuCart() {
 
     plus?.addEventListener('click', () => {
       cart.set(id, Math.min(20, Number(cart.get(id) || 0) + 1));
+      triggerHaptic(6);
       render();
     });
     minus?.addEventListener('click', () => {
       cart.set(id, Math.max(0, Number(cart.get(id) || 0) - 1));
+      triggerHaptic(6);
       render();
     });
     input?.addEventListener('change', () => {
@@ -364,6 +467,27 @@ function initMenuCart() {
     }
     if (status) status.textContent = 'Прошлая корзина восстановлена.';
     render();
+  });
+
+  shareBtn?.addEventListener('click', async () => {
+    const lines = [];
+    cart.forEach((qty, id) => {
+      if (qty <= 0) return;
+      const card = cards.find((c) => String(c.dataset.menuId || '') === String(id));
+      const name = card?.dataset.menuName || `#${id}`;
+      lines.push(`${name} × ${qty}`);
+    });
+    if (!lines.length) {
+      if (status) status.textContent = 'Корзина пуста — пока нечем делиться.';
+      return;
+    }
+    const text = `Мой заказ в Kapouch:\n${lines.join('\n')}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (status) status.textContent = 'Состав корзины скопирован — можно отправить другу.';
+    } catch {
+      if (status) status.textContent = 'Не удалось скопировать корзину.';
+    }
   });
   clearBtn?.addEventListener('click', () => {
     cart.clear();
@@ -626,6 +750,8 @@ initBottomNavActive();
 showInAppFeed();
 initCopyButtons();
 initMenuFavorites();
+initEngagementFeatures();
+initLuckyAndRecentMenu();
 initMenuSearch();
 initMenuCart();
 initAqsiSync();

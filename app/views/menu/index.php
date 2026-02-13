@@ -1,4 +1,15 @@
 <h2>Меню Kapouch</h2>
+<section class="card menu-engagement fade-in">
+  <div class="kpi-row">
+    <div><small>Дневная серия</small><strong id="streakValue">0</strong></div>
+    <div><small>Лаки-бонус</small><strong id="dailyBonusValue">—</strong></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn ghost" type="button" id="dailyBonusBtn">🎁 Получить бонус дня</button>
+    <button class="btn ghost" type="button" id="themeToggleBtn">🌗 Тема</button>
+  </div>
+  <small class="muted" id="engagementHint">Заходите ежедневно — открывайте новые бонусы и держите серию посещений.</small>
+</section>
 <section class="card menu-filters">
   <form method="get" class="row" style="align-items:end">
     <label style="flex:1">Категория
@@ -20,6 +31,16 @@
     </label>
     <button class="btn ghost" type="button" id="menuRestoreLast" title="Быстро восстановить прошлую корзину">Повторить прошлый заказ</button>
   </div>
+  <div class="row" style="margin-top:8px;align-items:end">
+    <label style="flex:1">Мин. цена
+      <input id="menuMinPrice" type="number" min="0" step="1" placeholder="0">
+    </label>
+    <label style="flex:1">Макс. цена
+      <input id="menuMaxPrice" type="number" min="0" step="1" placeholder="9999">
+    </label>
+  </div>
+  <div class="favorites-summary" id="luckyPickHint">🎯 Лаки-позиция дня: загрузка...</div>
+  <div class="favorites-summary muted" id="recentMenuView">Вы еще не просматривали позиции — выберите что-нибудь интересное.</div>
   <div id="favoritesSummary" class="favorites-summary muted">Добавляйте любимые позиции в избранное, чтобы не искать их каждый раз.</div>
 </section>
 <section class="card" id="menuCart" data-menu-cart>
@@ -29,12 +50,16 @@
   <label>Списать кэшбэк</label>
   <input id="menuCashbackSpend" type="number" min="0" step="0.01" value="0">
   <small class="muted" id="menuCashbackHint">К оплате по СБП: 0.00 ₽</small>
+  <small class="muted" id="menuEtaHint">Оценка готовности: —</small>
   <div class="row">
     <button class="btn" type="button" id="menuPayBtn" data-menu-pay>Оплатить через СБП Т‑Банк</button>
     <button class="btn ghost" type="button" id="menuCartClear">Очистить</button>
+    <button class="btn ghost" type="button" id="menuCartShare">Поделиться корзиной</button>
   </div>
   <small class="muted" id="menuPayStatus">Для оплаты нужен вход в аккаунт.</small>
 </section>
+
+<section class="card" id="menuUpsell" hidden></section>
 
 <section class="grid-2" data-menu-list>
   <?php
