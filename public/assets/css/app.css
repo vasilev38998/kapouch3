@@ -66,3 +66,10 @@ body{background:radial-gradient(1200px 600px at 10% -20%,var(--bg-glow),transpar
 .live-order{transition:transform .18s ease, box-shadow .2s ease}
 .live-order:hover{transform:translateY(-2px);box-shadow:0 16px 28px rgba(74,45,37,.16)}
 @media (max-width:640px){.notif-card{grid-template-columns:1fr}.notif-image{width:100%;height:170px}}
+
+.has-bottom-nav{padding-bottom:96px}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:80;display:flex;justify-content:space-around;gap:6px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(255,246,210,.95),rgba(255,229,156,.98));border-top:1px solid rgba(148,94,52,.2);box-shadow:0 -8px 26px rgba(74,45,37,.14);backdrop-filter:blur(12px)}
+.bottom-nav a{flex:1;min-width:0;text-align:center;text-decoration:none;color:var(--brown);font-weight:800;font-size:13px;padding:10px 6px;border-radius:12px;background:rgba(255,255,255,.45)}
+.bottom-nav a:hover{background:#fff;transform:translateY(-1px)}
+.install-btn{bottom:86px}
+@media (min-width:900px){.bottom-nav{left:50%;transform:translateX(-50%);max-width:760px;border-radius:16px 16px 0 0}.has-bottom-nav{padding-bottom:110px}}
