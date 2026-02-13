@@ -33,6 +33,26 @@ class ProfileController {
             $history[] = ['kind' => 'order', 'title' => 'Заказ #' . $row['id'], 'value' => $row['total_amount'] . ' ₽', 'meta' => ($statusMap[$row['status']] ?? (string)$row['status']), 'created_at' => $row['created_at']];
         }
 
+        $ps = $pdo->prepare("SELECT id, external_order_id, amount, status, payload_json, created_at FROM payment_sessions WHERE user_id=? AND provider=? AND status IN ('accepted','preparing','ready','done') ORDER BY created_at DESC LIMIT 20");
+        $ps->execute([$user['id'], 'tinkoff_sbp']);
+        $payStatusMap = ['accepted' => 'оплачен', 'preparing' => 'в приготовлении', 'ready' => 'готов', 'done' => 'выдан'];
+        foreach ($ps->fetchAll() as $row) {
+            $payload = json_decode((string)($row['payload_json'] ?? ''), true) ?: [];
+            $total = (float)($payload['amount_total'] ?? (float)$row['amount']);
+            $cashbackSpend = (float)($payload['cashback_spend'] ?? 0);
+            $meta = ($payStatusMap[$row['status']] ?? (string)$row['status']) . ' · ' . (string)$row['external_order_id'];
+            if ($cashbackSpend > 0) {
+                $meta .= ' · кэшбэк ' . number_format($cashbackSpend, 2, '.', ' ') . ' ₽';
+            }
+            $history[] = [
+                'kind' => 'online_order',
+                'title' => 'Онлайн-заказ',
+                'value' => number_format($total, 2, '.', ' ') . ' ₽',
+                'meta' => $meta,
+                'created_at' => (string)$row['created_at'],
+            ];
+        }
+
         $cb = $pdo->prepare('SELECT id,type,amount,created_at FROM cashback_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
         $cb->execute([$user['id']]);
         $cbTypeMap = ['earn' => 'начисление', 'spend' => 'списание', 'adjust' => 'корректировка', 'reversal' => 'реверс'];

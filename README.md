@@ -203,6 +203,6 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 - для оплаты требуется авторизация пользователя.
 
 
-- Лента заказов в реальном времени для бариста: `/staff/orders/live` + API `/api/staff/orders/live` и смена статуса через `/api/staff/orders/live/status`.
+- Лента заказов в реальном времени для бариста: `/staff/orders/live` + API `/api/staff/orders/live` и смена статуса через `/api/staff/orders/live/status`. В ленту попадают только успешно оплаченные заказы (статусы `accepted`, `preparing`, `ready`, `done`).
 
 Если при оплате вы видите «не удалось создать платёж», теперь API возвращает точную причину: не настроены ключи (`config_missing`) или ошибка провайдера (`provider_error`).

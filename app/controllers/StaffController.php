@@ -171,8 +171,17 @@ class StaffController {
         header('Content-Type: application/json; charset=utf-8');
 
         $limit = max(5, min(100, (int)($_GET['limit'] ?? 30)));
-        $stmt = Db::pdo()->prepare('SELECT ps.id, ps.external_order_id, ps.amount, ps.status, ps.payload_json, ps.created_at, ps.updated_at, u.phone FROM payment_sessions ps JOIN users u ON u.id=ps.user_id ORDER BY ps.id DESC LIMIT ?');
-        $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
+        $visibleStatuses = ['accepted', 'preparing', 'ready', 'done'];
+        $statusPlaceholders = implode(',', array_fill(0, count($visibleStatuses), '?'));
+        $sql = 'SELECT ps.id, ps.external_order_id, ps.amount, ps.status, ps.payload_json, ps.created_at, ps.updated_at, u.phone '
+             . 'FROM payment_sessions ps JOIN users u ON u.id=ps.user_id '
+             . "WHERE ps.status IN ($statusPlaceholders) ORDER BY ps.id DESC LIMIT ?";
+        $stmt = Db::pdo()->prepare($sql);
+        $idx = 1;
+        foreach ($visibleStatuses as $status) {
+            $stmt->bindValue($idx++, $status, \PDO::PARAM_STR);
+        }
+        $stmt->bindValue($idx, $limit, \PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll();
 
