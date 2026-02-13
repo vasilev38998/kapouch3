@@ -1,0 +1,71 @@
+<?php
+return [
+    'app' => [
+        'name' => 'Kapouch',
+        'base_url' => 'https://example.com',
+        'env' => 'production',
+        'debug' => false,
+        'secret' => 'change_me_super_secret',
+        'qr_ttl_days' => 30,
+        'timezone' => 'Europe/Moscow',
+        'short_code_ttl_minutes' => 6,
+    ],
+    'security' => [
+        'csrf_key' => 'change_me_csrf_secret',
+        'session_name' => 'kapouch_session',
+        'session_ttl' => 1209600,
+    ],
+
+    'db' => [
+        'host' => 'localhost',
+        'port' => 3306,
+        'database' => 'coffee_loyalty',
+        'username' => 'db_user',
+        'password' => 'db_password',
+        'charset' => 'utf8mb4',
+    ],
+    'aqsi' => [
+        'base_url' => 'https://api.aqsi.ru',
+        'api_token' => '',
+        'receipt_path' => '/v1/receipts/{id}',
+        'order_path' => '/v1/orders/{id}',
+    ],
+
+    'tinkoff' => [
+        'base_url' => 'https://securepay.tinkoff.ru/v2',
+        'terminal_key' => '',
+        'password' => '',
+        'notification_url' => 'https://example.com/api/payments/tinkoff/notify',
+        'receipt_enabled' => '1',
+        'receipt_taxation' => 'usn_income',
+        'receipt_vat' => 'none',
+        'receipt_payment_object' => 'commodity',
+        'receipt_payment_method' => 'full_payment',
+        'receipt_email' => '',
+    ],
+    'sms_ru' => [
+        'api_id' => 'sms_ru_api_id',
+        'from' => 'Coffee',
+        'test' => true,
+    ],
+    'cashback' => [
+        'earn_percent' => 10,
+        'max_spend_percent' => 10,
+    ],
+
+    'review_links' => [
+        '2gis_url' => 'https://2gis.ru/',
+        'yandex_url' => 'https://yandex.ru/maps/',
+    ],
+    'otp' => [
+        'ttl_minutes' => 5,
+        'cooldown_sec' => 60,
+        'sms_per_day' => 5,
+        'attempts' => 3,
+    ],
+    'features' => [
+        'preorder' => false,
+        'qr_nonce_single_use' => false,
+        'locations_enabled' => true,
+    ],
+];
