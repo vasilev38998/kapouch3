@@ -96,12 +96,13 @@ class CheckoutController {
         $orderId = 'pwa-' . (int)$user['id'] . '-' . date('YmdHis') . '-' . random_int(1000, 9999);
 
         $baseUrl = rtrim((string)config('app.base_url', ''), '/');
+        $notificationUrl = (string)\App\Lib\Settings::get('tinkoff.notification_url', config('tinkoff.notification_url', $baseUrl . '/api/payments/tinkoff/notify'));
 
         $receiptEnabled = (string)\App\Lib\Settings::get('tinkoff.receipt_enabled', '1') !== '0';
         $receipt = null;
         if ($receiptEnabled) {
             $vat = (string)\App\Lib\Settings::get('tinkoff.receipt_vat', 'none');
-            $paymentObject = (string)\App\Lib\Settings::get('tinkoff.receipt_payment_object', 'service');
+            $paymentObject = (string)\App\Lib\Settings::get('tinkoff.receipt_payment_object', 'commodity');
             $paymentMethod = (string)\App\Lib\Settings::get('tinkoff.receipt_payment_method', 'full_payment');
             $taxation = (string)\App\Lib\Settings::get('tinkoff.receipt_taxation', 'usn_income');
             $customerEmail = trim((string)\App\Lib\Settings::get('tinkoff.receipt_email', ''));
@@ -150,7 +151,7 @@ class CheckoutController {
             'description' => 'Заказ в PWA Kapouch',
             'success_url' => $baseUrl . '/profile',
             'fail_url' => $baseUrl . '/menu',
-            'notification_url' => $baseUrl . '/api/payments/tinkoff/notify',
+            'notification_url' => $notificationUrl,
             'customer_key' => 'user-' . (int)$user['id'],
             'receipt' => $receipt,
         ]);
@@ -193,4 +194,97 @@ class CheckoutController {
             'cashback_spend' => $cashbackSpend,
         ], JSON_UNESCAPED_UNICODE);
     }
+
+    public function tinkoffNotify(): void {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $raw = file_get_contents('php://input') ?: '';
+        $data = [];
+        $contentType = strtolower((string)($_SERVER['CONTENT_TYPE'] ?? ''));
+        if (str_contains($contentType, 'application/json') && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) $data = $decoded;
+        }
+        if (!$data && !empty($_POST)) {
+            $data = $_POST;
+        }
+        if (!$data) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'bad_payload'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $token = (string)($data['Token'] ?? '');
+        if ($token === '' || !$this->verifyTinkoffToken($data, $token)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'bad_token'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $orderId = (string)($data['OrderId'] ?? '');
+        if ($orderId === '') {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'error' => 'order_id_required'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $status = $this->mapTinkoffStatus((string)($data['Status'] ?? ''));
+        $pdo = Db::pdo();
+
+        $stmt = $pdo->prepare('SELECT id, payload_json FROM payment_sessions WHERE external_order_id=? LIMIT 1');
+        $stmt->execute([$orderId]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $payload = json_decode((string)($row['payload_json'] ?? ''), true);
+        if (!is_array($payload)) $payload = [];
+        $payload['tinkoff_last_notification'] = [
+            'received_at' => date('c'),
+            'status' => (string)($data['Status'] ?? ''),
+            'success' => (bool)($data['Success'] ?? false),
+            'payment_id' => (string)($data['PaymentId'] ?? ''),
+            'raw' => $data,
+        ];
+
+        $pdo->prepare('UPDATE payment_sessions SET status=?, payload_json=?, updated_at=NOW() WHERE id=?')
+            ->execute([
+                $status,
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+                (int)$row['id'],
+            ]);
+
+        echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function verifyTinkoffToken(array $data, string $token): bool {
+        $password = (string)\App\Lib\Settings::get('tinkoff.password', config('tinkoff.password', ''));
+        if ($password === '') {
+            return false;
+        }
+
+        unset($data['Token']);
+        $data['Password'] = $password;
+        $flat = [];
+        foreach ($data as $k => $v) {
+            if (is_scalar($v)) {
+                $flat[$k] = (string)$v;
+            }
+        }
+        ksort($flat);
+        $expected = hash('sha256', implode('', $flat));
+        return hash_equals($expected, $token);
+    }
+
+    private function mapTinkoffStatus(string $providerStatus): string {
+        return match (strtoupper($providerStatus)) {
+            'CONFIRMED', 'AUTHORIZED' => 'accepted',
+            'REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED' => 'cancelled',
+            'REJECTED', 'DEADLINE_EXPIRED', 'EXPIRED' => 'failed',
+            default => 'created',
+        };
+    }
+
 }

@@ -72,11 +72,12 @@ class AdminController {
             'tinkoff.base_url' => ['label' => 'Т‑Банк API URL', 'default' => (string)config('tinkoff.base_url', 'https://securepay.tinkoff.ru/v2')],
             'tinkoff.terminal_key' => ['label' => 'Т‑Банк Terminal Key', 'default' => (string)config('tinkoff.terminal_key', '')],
             'tinkoff.password' => ['label' => 'Т‑Банк Password', 'default' => (string)config('tinkoff.password', '')],
+            'tinkoff.notification_url' => ['label' => 'Т‑Банк Notification URL (webhook)', 'default' => (string)config('tinkoff.notification_url', rtrim((string)config('app.base_url', ''), '/') . '/api/payments/tinkoff/notify')],
 
             'tinkoff.receipt_enabled' => ['label' => 'Т‑Чеки включены (1/0)', 'default' => '1'],
             'tinkoff.receipt_taxation' => ['label' => 'Т‑Чеки Taxation', 'default' => 'usn_income'],
             'tinkoff.receipt_vat' => ['label' => 'Т‑Чеки НДС (none/vat10/vat20...)', 'default' => 'none'],
-            'tinkoff.receipt_payment_object' => ['label' => 'Т‑Чеки PaymentObject', 'default' => 'service'],
+            'tinkoff.receipt_payment_object' => ['label' => 'Т‑Чеки PaymentObject', 'default' => 'commodity'],
             'tinkoff.receipt_payment_method' => ['label' => 'Т‑Чеки PaymentMethod', 'default' => 'full_payment'],
             'tinkoff.receipt_email' => ['label' => 'Т‑Чеки Email магазина/клиента', 'default' => ''],
 

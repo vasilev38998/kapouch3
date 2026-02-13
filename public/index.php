@@ -16,8 +16,10 @@ spl_autoload_register(function (string $class): void {
     if (file_exists($file)) require $file;
 });
 
+session_name((string)config('security.session_name', 'kapouch_session'));
+
 session_set_cookie_params([
-    'lifetime' => 0,
+    'lifetime' => (int)config('security.session_ttl', 0),
     'path' => '/',
     'domain' => '',
     'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
@@ -107,6 +109,7 @@ $routes = [
         '/api/notifications/read-all' => [NotificationController::class, 'readAll'],
         '/api/menu/favorites/toggle' => [MenuController::class, 'toggleFavorite'],
         '/api/checkout/sbp' => [CheckoutController::class, 'sbp'],
+        '/api/payments/tinkoff/notify' => [CheckoutController::class, 'tinkoffNotify'],
     ],
 ];
 

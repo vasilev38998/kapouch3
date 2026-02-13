@@ -183,6 +183,7 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
    - `tinkoff.base_url` (обычно `https://securepay.tinkoff.ru/v2`)
    - `tinkoff.terminal_key`
    - `tinkoff.password`
+   - `tinkoff.notification_url` (URL для webhook, например `https://kapouch.ru/api/payments/tinkoff/notify`)
    - `tinkoff.receipt_enabled` (1/0, для Т‑Чеков)
    - `tinkoff.receipt_taxation` (например `usn_income`)
    - `tinkoff.receipt_vat` (например `none`)
@@ -197,6 +198,7 @@ PWA-приложение для кофейни Kapouch: loyalty (штампы), 
 
 Технически:
 - endpoint: `POST /api/checkout/sbp`;
+- webhook от Т‑Банка: `POST /api/payments/tinkoff/notify` (обновляет статус в `payment_sessions`);
 - сохраняется сессия оплаты в `payment_sessions`;
 - для оплаты требуется авторизация пользователя.
 
