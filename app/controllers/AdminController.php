@@ -1,0 +1,761 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use App\Lib\Audit;
+use App\Lib\Auth;
+use App\Lib\Csrf;
+use App\Lib\CsvExport;
+use App\Lib\Db;
+use App\Lib\Settings;
+use PDO;
+
+class AdminController {
+    public function dashboard(): void {
+        Auth::requireRole(['manager', 'admin']);
+        $pdo = Db::pdo();
+        $stats = [
+            'users_total' => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
+            'orders_30d' => (int)$pdo->query('SELECT COUNT(*) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)')->fetchColumn(),
+            'cashback_30d' => (float)$pdo->query("SELECT COALESCE(SUM(amount),0) FROM cashback_ledger WHERE type='earn' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+            'rewards_30d' => (int)$pdo->query("SELECT COUNT(*) FROM rewards WHERE status='redeemed' AND redeemed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+        ];
+        $health = [
+            'otp_24h' => (int)$pdo->query('SELECT COUNT(*) FROM otp_requests WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)')->fetchColumn(),
+            'otp_fail_24h' => (int)$pdo->query("SELECT COUNT(*) FROM otp_requests WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sms_status IS NOT NULL AND sms_status NOT IN ('ok','OK')")->fetchColumn(),
+            'notifications_7d' => (int)$pdo->query("SELECT COUNT(*) FROM user_notifications WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn(),
+            'notifications_read_7d' => (int)$pdo->query("SELECT COUNT(*) FROM user_notifications WHERE is_read=1 AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn(),
+            'unread_notifs' => (int)$pdo->query('SELECT COUNT(*) FROM user_notifications WHERE is_read=0')->fetchColumn(),
+            'menu_sold_out' => (int)$pdo->query('SELECT COUNT(*) FROM menu_items WHERE is_active=1 AND is_sold_out=1')->fetchColumn(),
+        ];
+        $recentUsers = $pdo->query('SELECT id,phone,role,created_at FROM users ORDER BY id DESC LIMIT 8')->fetchAll();
+        view('admin/dashboard', ['stats' => $stats, 'health' => $health, 'recentUsers' => $recentUsers]);
+    }
+
+    public function settings(): void {
+        Auth::requireRole(['admin']);
+
+        $meta = $this->settingsMeta();
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            foreach ($meta as $key => $m) {
+                if (!array_key_exists($key, $_POST)) continue;
+                $val = trim((string)$_POST[$key]);
+                $old = Settings::get($key, $m['default'] ?? null);
+                Settings::set($key, $val);
+                Audit::log((int)Auth::user()['id'], 'settings_update', 'setting', null, 'ok', $key . ': ' . (string)$old . ' -> ' . $val);
+            }
+            redirect('/admin/settings');
+        }
+
+        $values = [];
+        foreach ($meta as $key => $m) {
+            $values[$key] = (string)Settings::get($key, (string)($m['default'] ?? ''));
+        }
+
+        view('admin/settings', ['meta' => $meta, 'values' => $values]);
+    }
+
+    private function settingsMeta(): array {
+        return [
+            'cashback_percent' => ['label' => 'Кэшбэк начисление, %', 'default' => '5'],
+            'cashback_max_spend_percent' => ['label' => 'Макс. списание кэшбэка от чека, %', 'default' => '30'],
+            'stamps_required_for_reward' => ['label' => 'Штампов для награды', 'default' => '6'],
+
+            'review_links.2gis_url' => ['label' => 'Ссылка на 2ГИС', 'default' => (string)config('review_links.2gis_url', '')],
+            'review_links.yandex_url' => ['label' => 'Ссылка на Яндекс Карты', 'default' => (string)config('review_links.yandex_url', '')],
+
+            'tinkoff.base_url' => ['label' => 'Т‑Банк API URL', 'default' => (string)config('tinkoff.base_url', 'https://securepay.tinkoff.ru/v2')],
+            'tinkoff.terminal_key' => ['label' => 'Т‑Банк Terminal Key', 'default' => (string)config('tinkoff.terminal_key', '')],
+            'tinkoff.password' => ['label' => 'Т‑Банк Password', 'default' => (string)config('tinkoff.password', '')],
+            'tinkoff.notification_url' => ['label' => 'Т‑Банк Notification URL (webhook)', 'default' => (string)config('tinkoff.notification_url', rtrim((string)config('app.base_url', ''), '/') . '/api/payments/tinkoff/notify')],
+
+            'tinkoff.receipt_enabled' => ['label' => 'Т‑Чеки включены (1/0)', 'default' => '1'],
+            'tinkoff.receipt_taxation' => ['label' => 'Т‑Чеки Taxation', 'default' => 'usn_income'],
+            'tinkoff.receipt_vat' => ['label' => 'Т‑Чеки НДС (none/vat10/vat20...)', 'default' => 'none'],
+            'tinkoff.receipt_payment_object' => ['label' => 'Т‑Чеки PaymentObject', 'default' => 'commodity'],
+            'tinkoff.receipt_payment_method' => ['label' => 'Т‑Чеки PaymentMethod', 'default' => 'full_payment'],
+            'tinkoff.receipt_email' => ['label' => 'Т‑Чеки Email магазина/клиента', 'default' => ''],
+
+            'aqsi.base_url' => ['label' => 'AQSI API URL', 'default' => (string)config('aqsi.base_url', '')],
+            'aqsi.api_token' => ['label' => 'AQSI API Token', 'default' => (string)config('aqsi.api_token', '')],
+            'aqsi.receipt_path' => ['label' => 'AQSI путь чека', 'default' => (string)config('aqsi.receipt_path', '/v1/receipts/{id}')],
+            'aqsi.order_path' => ['label' => 'AQSI fallback путь заказа', 'default' => (string)config('aqsi.order_path', '/v1/orders/{id}')],
+
+        ];
+    }
+
+    public function users(): void {
+        Auth::requireRole(['admin']);
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            Db::pdo()->prepare('UPDATE users SET role=? WHERE id=?')->execute([$_POST['role'], $_POST['user_id']]);
+            Audit::log((int)Auth::user()['id'], 'role_update', 'user', (int)$_POST['user_id'], 'ok', 'role=' . $_POST['role']);
+            redirect('/admin/users');
+        }
+        $users = Db::pdo()->query('SELECT id, phone, role, ref_code, created_at FROM users ORDER BY id DESC LIMIT 300')->fetchAll();
+        view('admin/users', ['users' => $users]);
+    }
+
+    public function locations(): void {
+        Auth::requireRole(['admin']);
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            if (($_POST['action'] ?? '') === 'toggle') {
+                Db::pdo()->prepare('UPDATE locations SET is_active = IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['location_id']]);
+                redirect('/admin/locations');
+            }
+            Db::pdo()->prepare('INSERT INTO locations(name,address,`2gis_url`,yandex_url,is_active) VALUES(?,?,?,?,1)')
+                ->execute([$_POST['name'], $_POST['address'], $_POST['url2gis'], $_POST['urly']]);
+            redirect('/admin/locations');
+        }
+        $locations = Db::pdo()->query('SELECT * FROM locations ORDER BY id DESC')->fetchAll();
+        view('admin/locations', ['locations' => $locations]);
+    }
+
+    public function promocodes(): void {
+        Auth::requireRole(['manager', 'admin']);
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = $_POST['action'] ?? 'create';
+            if ($action === 'toggle') {
+                Db::pdo()->prepare('UPDATE promocodes SET is_active=IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['promocode_id']]);
+                redirect('/admin/promocodes');
+            }
+            Db::pdo()->prepare('INSERT INTO promocodes(code,type,value,starts_at,ends_at,max_uses_total,max_uses_per_user,min_order_amount,location_id,is_active,meta_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+                ->execute([
+                    strtoupper(trim((string)$_POST['code'])), $_POST['type'], $_POST['value'],
+                    $_POST['starts_at'] ?: null, $_POST['ends_at'] ?: null,
+                    $_POST['max_uses_total'] ?: null, $_POST['max_uses_per_user'] ?: null,
+                    $_POST['min_order_amount'] ?: null, $_POST['location_id'] ?: null,
+                    isset($_POST['is_active']) ? 1 : 0, $_POST['meta_json'] ?: '{}',
+                ]);
+            redirect('/admin/promocodes');
+        }
+        $rows = Db::pdo()->query('SELECT * FROM promocodes ORDER BY id DESC LIMIT 300')->fetchAll();
+        view('admin/promocodes', ['rows' => $rows]);
+    }
+
+    public function missions(): void {
+        Auth::requireRole(['manager', 'admin']);
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = $_POST['action'] ?? 'create';
+            if ($action === 'toggle') {
+                Db::pdo()->prepare('UPDATE missions SET is_active=IF(is_active=1,0,1) WHERE id=?')->execute([(int)$_POST['mission_id']]);
+                redirect('/admin/missions');
+            }
+            Db::pdo()->prepare('INSERT INTO missions(name,type,config_json,reward_json,starts_at,ends_at,is_active) VALUES(?,?,?,?,?,?,?)')
+                ->execute([
+                    $_POST['name'], $_POST['type'], $_POST['config_json'] ?: '{}', $_POST['reward_json'] ?: '{}',
+                    $_POST['starts_at'] ?: null, $_POST['ends_at'] ?: null, isset($_POST['is_active']) ? 1 : 0,
+                ]);
+            redirect('/admin/missions');
+        }
+        $rows = Db::pdo()->query('SELECT * FROM missions ORDER BY id DESC LIMIT 300')->fetchAll();
+        view('admin/missions', ['rows' => $rows]);
+    }
+
+    public function push(): void {
+        Auth::requireRole(['manager', 'admin']);
+        $allowedAudience = ['all', 'user', 'barista', 'manager', 'admin'];
+
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = (string)($_POST['action'] ?? 'send');
+            if ($action === 'dispatch_due') {
+                $this->dispatchScheduledCampaigns();
+                redirect('/admin/push');
+            }
+            if ($action === 'template_create') {
+                Db::pdo()->prepare('INSERT INTO push_templates(name,title,body,url,is_active,created_at) VALUES(?,?,?,?,1,NOW())')
+                    ->execute([
+                        trim((string)($_POST['template_name'] ?? '')) ?: 'Шаблон',
+                        trim((string)($_POST['template_title'] ?? '')),
+                        trim((string)($_POST['template_body'] ?? '')),
+                        trim((string)($_POST['template_url'] ?? '/profile')) ?: '/profile',
+                    ]);
+                redirect('/admin/push');
+            }
+
+            $title = trim((string)($_POST['title'] ?? ''));
+            $body = trim((string)($_POST['body'] ?? ''));
+            $url = trim((string)($_POST['url'] ?? '/profile')) ?: '/profile';
+            $audience = (string)($_POST['audience'] ?? 'all');
+            $scheduleAt = trim((string)($_POST['schedule_at'] ?? ''));
+            if (!in_array($audience, $allowedAudience, true)) $audience = 'all';
+
+            if ($title && $body) {
+                $status = $scheduleAt !== '' ? 'scheduled' : 'sent';
+                $sentAt = $scheduleAt !== '' ? null : now();
+                $scheduledFor = $scheduleAt !== '' ? date('Y-m-d H:i:s', strtotime($scheduleAt)) : null;
+                Db::pdo()->prepare('INSERT INTO push_campaigns(title, body, url, target_role, recipients_count, clicks_count, status, scheduled_for, sent_at, created_by_user_id, created_at) VALUES(?,?,?,?,0,0,?,?,?,?,NOW())')
+                    ->execute([$title, $body, $url, $audience, $status, $scheduledFor, $sentAt, (int)Auth::user()['id']]);
+                $campaignId = (int)Db::pdo()->lastInsertId();
+                if ($status === 'sent') {
+                    $recipients = $this->dispatchCampaign($campaignId);
+                    Db::pdo()->prepare('UPDATE push_campaigns SET recipients_count=? WHERE id=?')->execute([$recipients, $campaignId]);
+                }
+                Audit::log((int)Auth::user()['id'], 'profile_notification_send', 'push_campaign', $campaignId, 'ok', 'audience=' . $audience . '; status=' . $status);
+            }
+            redirect('/admin/push');
+        }
+
+        $this->dispatchScheduledCampaigns();
+        $campaigns = Db::pdo()->query("SELECT c.*, COALESCE(SUM(CASE WHEN n.is_read=1 THEN 1 ELSE 0 END),0) AS read_count, COALESCE(COUNT(n.id),0) AS sent_count FROM push_campaigns c LEFT JOIN user_notifications n ON n.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC LIMIT 80")->fetchAll();
+        $templates = Db::pdo()->query('SELECT * FROM push_templates WHERE is_active=1 ORDER BY id DESC LIMIT 30')->fetchAll();
+        $audienceStats = Db::pdo()->query('SELECT role, COUNT(*) c FROM users GROUP BY role ORDER BY role')->fetchAll();
+        view('admin/push', ['campaigns' => $campaigns, 'audienceStats' => $audienceStats, 'templates' => $templates]);
+    }
+
+    private function dispatchScheduledCampaigns(): void {
+        $rows = Db::pdo()->query("SELECT id FROM push_campaigns WHERE status='scheduled' AND scheduled_for IS NOT NULL AND scheduled_for <= NOW() ORDER BY id ASC LIMIT 20")->fetchAll();
+        foreach ($rows as $row) {
+            $campaignId = (int)$row['id'];
+            $recipients = $this->dispatchCampaign($campaignId);
+            Db::pdo()->prepare("UPDATE push_campaigns SET status='sent', sent_at=NOW(), recipients_count=? WHERE id=?")->execute([$recipients, $campaignId]);
+        }
+    }
+
+    private function dispatchCampaign(int $campaignId): int {
+        $stmt = Db::pdo()->prepare('SELECT id,title,body,url,target_role FROM push_campaigns WHERE id=? LIMIT 1');
+        $stmt->execute([$campaignId]);
+        $c = $stmt->fetch();
+        if (!$c) return 0;
+
+        $sql = 'INSERT INTO user_notifications(campaign_id,user_id,title,body,url,is_read,created_at) SELECT ?,id,?,?,?,0,NOW() FROM users';
+        $params = [$campaignId, $c['title'], $c['body'], $c['url']];
+        $roleFilter = (string)($c['target_role'] ?? 'all');
+        if ($roleFilter !== 'all') {
+            $sql .= ' WHERE role=?';
+            $params[] = $roleFilter;
+        }
+        $ins = Db::pdo()->prepare($sql);
+        $ins->execute($params);
+        $rowsInserted = (int)$ins->rowCount();
+
+        return $rowsInserted;
+    }
+
+    public function data(): void {
+        Auth::requireRole(['admin']);
+        $tables = $this->listTables();
+        $table = $_GET['table'] ?? ($tables[0] ?? 'users');
+        $this->assertAllowedTable($table, $tables);
+
+        $search = trim((string)($_GET['q'] ?? ''));
+        $limit = (int)($_GET['limit'] ?? 200);
+        if ($limit < 20) $limit = 20;
+        if ($limit > 500) $limit = 500;
+
+        $pdo = Db::pdo();
+        $columns = $pdo->query('SHOW COLUMNS FROM `' . $table . '`')->fetchAll();
+        $rows = [];
+
+        $textColumns = [];
+        foreach ($columns as $column) {
+            $type = strtolower((string)($column['Type'] ?? ''));
+            if (str_contains($type, 'char') || str_contains($type, 'text') || str_contains($type, 'json')) {
+                $textColumns[] = (string)$column['Field'];
+            }
+        }
+
+        if ($search !== '' && $textColumns) {
+            $where = implode(' OR ', array_map(fn($c) => '`' . $c . '` LIKE ?', $textColumns));
+            $sql = 'SELECT * FROM `' . $table . '` WHERE ' . $where . ' ORDER BY 1 DESC LIMIT ' . $limit;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_fill(0, count($textColumns), '%' . $search . '%'));
+            $rows = $stmt->fetchAll();
+        } else {
+            $rows = $pdo->query('SELECT * FROM `' . $table . '` ORDER BY 1 DESC LIMIT ' . $limit)->fetchAll();
+        }
+
+        if (($_GET['export'] ?? '') === 'csv') {
+            CsvExport::output($table . '.csv', array_column($columns, 'Field'), $rows);
+        }
+
+        $pk = null;
+        foreach ($columns as $c) if (($c['Key'] ?? '') === 'PRI') { $pk = $c['Field']; break; }
+
+        view('admin/data', [
+            'tables' => $tables,
+            'table' => $table,
+            'columns' => $columns,
+            'rows' => $rows,
+            'pk' => $pk,
+            'search' => $search,
+            'limit' => $limit,
+            'supportsSearch' => !empty($textColumns),
+        ]);
+    }
+
+    public function dataSave(): void {
+        Auth::requireRole(['admin']);
+        if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+        $tables = $this->listTables();
+        $table = (string)($_POST['table'] ?? '');
+        $this->assertAllowedTable($table, $tables);
+
+        $pdo = Db::pdo();
+        $columns = $pdo->query('SHOW COLUMNS FROM `' . $table . '`')->fetchAll();
+        $colNames = array_column($columns, 'Field');
+        $pk = null;
+        foreach ($columns as $c) if (($c['Key'] ?? '') === 'PRI') { $pk = $c['Field']; break; }
+
+        $action = $_POST['action'] ?? 'upsert';
+        if ($action === 'delete' && $pk && isset($_POST[$pk])) {
+            $pdo->prepare('DELETE FROM `' . $table . '` WHERE `' . $pk . '`=?')->execute([$_POST[$pk]]);
+            redirect('/admin/data?table=' . urlencode($table));
+        }
+
+        $payload = [];
+        foreach ($colNames as $c) {
+            if (array_key_exists($c, $_POST)) {
+                $payload[$c] = $_POST[$c] === '' ? null : $_POST[$c];
+            }
+        }
+
+        if ($pk && !empty($_POST[$pk])) {
+            $sets = [];
+            $vals = [];
+            foreach ($payload as $k => $v) {
+                if ($k === $pk) continue;
+                $sets[] = "`$k`=?";
+                $vals[] = $v;
+            }
+            if ($sets) {
+                $vals[] = $_POST[$pk];
+                $pdo->prepare('UPDATE `' . $table . '` SET ' . implode(',', $sets) . ' WHERE `' . $pk . '`=?')->execute($vals);
+            }
+        } else {
+            $insert = $payload;
+            if ($pk && array_key_exists($pk, $insert)) unset($insert[$pk]);
+            if ($insert) {
+                $cols = array_keys($insert);
+                $place = implode(',', array_fill(0, count($cols), '?'));
+                $pdo->prepare('INSERT INTO `' . $table . '` (`' . implode('`,`', $cols) . '`) VALUES(' . $place . ')')->execute(array_values($insert));
+            }
+        }
+
+        redirect('/admin/data?table=' . urlencode($table));
+    }
+
+    public function menu(): void {
+        Auth::requireRole(['manager', 'admin']);
+        $pdo = Db::pdo();
+
+        if (method_is('GET') && (string)($_GET['download_template'] ?? '') === '1') {
+            $template = (string)($_GET['template'] ?? 'full');
+            $this->downloadMenuImportTemplate($template);
+        }
+
+        if (method_is('POST')) {
+            if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
+            $action = (string)($_POST['action'] ?? 'create');
+            if ($action === 'toggle') {
+                $pdo->prepare('UPDATE menu_items SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'sold_out') {
+                $pdo->prepare('UPDATE menu_items SET is_sold_out=IF(is_sold_out=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'delete') {
+                $pdo->prepare('DELETE FROM menu_items WHERE id=?')->execute([(int)$_POST['item_id']]);
+                redirect('/admin/menu');
+            }
+
+            if ($action === 'mod_group_create') {
+                $pdo->prepare('INSERT INTO menu_item_modifier_groups(menu_item_id,name,selection_mode,is_required,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,1,?,NOW(),NOW())')
+                    ->execute([
+                        (int)($_POST['menu_item_id'] ?? 0),
+                        trim((string)($_POST['group_name'] ?? 'Модификаторы')) ?: 'Модификаторы',
+                        (string)(($_POST['selection_mode'] ?? 'single') === 'multi' ? 'multi' : 'single'),
+                        isset($_POST['is_required']) ? 1 : 0,
+                        (int)($_POST['sort_order'] ?? 100),
+                    ]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_group_toggle') {
+                $pdo->prepare('UPDATE menu_item_modifier_groups SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['group_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_group_delete') {
+                $pdo->prepare('DELETE FROM menu_item_modifier_groups WHERE id=?')->execute([(int)$_POST['group_id']]);
+                redirect('/admin/menu');
+            }
+
+            if ($action === 'mod_create') {
+                $pdo->prepare('INSERT INTO menu_item_modifiers(group_id,name,price_delta,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,1,0,?,NOW(),NOW())')
+                    ->execute([
+                        (int)($_POST['group_id'] ?? 0),
+                        trim((string)($_POST['modifier_name'] ?? 'Опция')) ?: 'Опция',
+                        (float)($_POST['price_delta'] ?? 0),
+                        (int)($_POST['sort_order'] ?? 100),
+                    ]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_toggle') {
+                $pdo->prepare('UPDATE menu_item_modifiers SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['modifier_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_sold_out') {
+                $pdo->prepare('UPDATE menu_item_modifiers SET is_sold_out=IF(is_sold_out=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['modifier_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_delete') {
+                $pdo->prepare('DELETE FROM menu_item_modifiers WHERE id=?')->execute([(int)$_POST['modifier_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'import_menu') {
+                if (!isset($_FILES['menu_import']) || !is_uploaded_file((string)($_FILES['menu_import']['tmp_name'] ?? ''))) {
+                    exit('Файл не загружен');
+                }
+                $importOptions = [
+                    'dry_run' => isset($_POST['dry_run']),
+                    'replace_mode' => isset($_POST['replace_mode']),
+                    'deactivate_missing_items' => isset($_POST['deactivate_missing_items']),
+                    'deactivate_missing_modifiers' => isset($_POST['deactivate_missing_modifiers']),
+                ];
+                $this->importMenuFromCsv((string)$_FILES['menu_import']['tmp_name'], $importOptions);
+                redirect('/admin/menu');
+            }
+
+            $pdo->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
+                ->execute([
+                    trim((string)$_POST['name']),
+                    trim((string)($_POST['category'] ?? 'Напитки')) ?: 'Напитки',
+                    (float)$_POST['price'],
+                    trim((string)($_POST['description'] ?? '')) ?: null,
+                    trim((string)($_POST['image_url'] ?? '')) ?: null,
+                    isset($_POST['is_active']) ? 1 : 0,
+                    isset($_POST['is_sold_out']) ? 1 : 0,
+                    (int)($_POST['sort_order'] ?? 100),
+                ]);
+            redirect('/admin/menu');
+        }
+
+        $items = $pdo->query('SELECT * FROM menu_items ORDER BY category ASC, sort_order ASC, id DESC')->fetchAll();
+        $groups = $pdo->query('SELECT * FROM menu_item_modifier_groups ORDER BY menu_item_id ASC, sort_order ASC, id ASC')->fetchAll();
+        $mods = $pdo->query('SELECT * FROM menu_item_modifiers ORDER BY group_id ASC, sort_order ASC, id ASC')->fetchAll();
+        view('admin/menu', ['items' => $items, 'groups' => $groups, 'modifiers' => $mods]);
+    }
+
+
+    private function downloadMenuImportTemplate(string $template = 'full'): never {
+        $template = strtolower(trim($template));
+        $rows = [];
+        if ($template === 'items') {
+            $rows = [
+                ['row_type','item_name','category','item_price','item_description','image_url','item_is_active','item_is_sold_out','item_sort_order'],
+                ['item','Капучино','Напитки','189.00','Классический капучино 300 мл','https://example.com/cappuccino.jpg','1','0','100'],
+                ['item','Латте','Напитки','219.00','Нежный латте 350 мл','https://example.com/latte.jpg','1','0','110'],
+            ];
+        } else {
+            $rows = [
+                ['row_type','item_name','category','item_price','item_description','image_url','item_is_active','item_is_sold_out','item_sort_order','group_name','group_selection_mode','group_is_required','group_sort_order','modifier_name','modifier_price_delta','modifier_is_active','modifier_is_sold_out','modifier_sort_order'],
+                ['item','Капучино','Напитки','189.00','Классический капучино 300 мл','https://example.com/cappuccino.jpg','1','0','100','','','','','','','','',''],
+                ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Ваниль','30.00','1','0','10'],
+                ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Карамель','30.00','1','0','20'],
+                ['modifier','Капучино','Напитки','','','','','','','Молоко','single','1','20','Кокосовое','45.00','1','0','10'],
+                ['modifier','Капучино','Напитки','','','','','','','Экстра шот','multi','0','30','Доп. шот эспрессо','60.00','1','0','10'],
+            ];
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        $filename = $template === 'items' ? 'menu_items_template.csv' : 'menu_import_template.csv';
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'wb');
+        foreach ($rows as $row) {
+            fputcsv($out, $row, ';');
+        }
+        fclose($out);
+        exit;
+    }
+
+    private function importMenuFromCsv(string $filePath, array $options = []): void {
+        $dryRun = (bool)($options['dry_run'] ?? false);
+        $replaceMode = (bool)($options['replace_mode'] ?? false);
+        $deactivateMissingItems = (bool)($options['deactivate_missing_items'] ?? false);
+        $deactivateMissingModifiers = (bool)($options['deactivate_missing_modifiers'] ?? false);
+
+        if (filesize($filePath) > 5 * 1024 * 1024) {
+            throw new \RuntimeException('Файл слишком большой: максимум 5 МБ');
+        }
+
+        $fh = fopen($filePath, 'rb');
+        if (!$fh) {
+            throw new \RuntimeException('Не удалось открыть файл импорта');
+        }
+
+        $sample = fgets($fh);
+        if ($sample === false) {
+            fclose($fh);
+            throw new \RuntimeException('Файл импорта пуст');
+        }
+        $delimiter = $this->detectCsvDelimiter($sample);
+        rewind($fh);
+
+        $header = fgetcsv($fh, 0, $delimiter);
+        if (!$header) {
+            fclose($fh);
+            throw new \RuntimeException('Файл импорта пуст');
+        }
+        $header = array_map(static fn($v): string => trim((string)$v), $header);
+        if (isset($header[0])) {
+            $header[0] = ltrim($header[0], "\xEF\xBB\xBF");
+        }
+
+        $required = ['row_type','item_name','category'];
+        foreach ($required as $col) {
+            if (!in_array($col, $header, true)) {
+                fclose($fh);
+                throw new \RuntimeException('Не хватает колонки: ' . $col);
+            }
+        }
+
+        $idx = array_flip($header);
+        $pdo = Db::pdo();
+        $stats = [
+            'rows_total' => 0,
+            'items_created' => 0,
+            'items_updated' => 0,
+            'groups_created' => 0,
+            'modifiers_created' => 0,
+            'modifiers_updated' => 0,
+            'errors' => 0,
+        ];
+        $errors = [];
+        $touchedItemIds = [];
+        $touchedModifierIds = [];
+
+        $pdo->beginTransaction();
+        $lineNo = 1;
+
+        while (($row = fgetcsv($fh, 0, $delimiter)) !== false) {
+            $lineNo++;
+            if (!$row || count(array_filter($row, static fn($v) => trim((string)$v) !== '')) === 0) continue;
+            $stats['rows_total']++;
+            $get = static function(string $key) use ($row, $idx): string {
+                return trim((string)($row[$idx[$key]] ?? ''));
+            };
+
+            $type = strtolower($get('row_type'));
+            if ($type !== 'item' && $type !== 'modifier') {
+                $errors[] = 'Строка ' . $lineNo . ': неизвестный row_type (' . $type . ')';
+                $stats['errors']++;
+                continue;
+            }
+            $itemName = $get('item_name');
+            $category = $get('category') !== '' ? $get('category') : 'Напитки';
+            if ($itemName === '') {
+                $errors[] = 'Строка ' . $lineNo . ': пустой item_name';
+                $stats['errors']++;
+                continue;
+            }
+
+            $stmtItem = $pdo->prepare('SELECT id FROM menu_items WHERE name=? AND category=? LIMIT 1');
+            $stmtItem->execute([$itemName, $category]);
+            $itemId = (int)$stmtItem->fetchColumn();
+
+            if ($type === 'item') {
+                $priceRaw = $get('item_price');
+                $price = $priceRaw !== '' ? $this->normalizeFloat($priceRaw) : 0;
+                if ($price < 0) {
+                    $errors[] = 'Строка ' . $lineNo . ': цена товара не может быть отрицательной';
+                    $stats['errors']++;
+                    continue;
+                }
+                if ($itemId > 0) {
+                    $pdo->prepare('UPDATE menu_items SET price=?, description=?, image_url=?, is_active=?, is_sold_out=?, sort_order=?, updated_at=NOW() WHERE id=?')
+                        ->execute([
+                            $price,
+                            $get('item_description') !== '' ? $get('item_description') : null,
+                            $get('image_url') !== '' ? $get('image_url') : null,
+                            $this->parseBool($get('item_is_active'), true) ? 1 : 0,
+                            $this->parseBool($get('item_is_sold_out'), false) ? 1 : 0,
+                            (int)($get('item_sort_order') !== '' ? $get('item_sort_order') : 100),
+                            $itemId,
+                        ]);
+                    $stats['items_updated']++;
+                } else {
+                    $pdo->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
+                        ->execute([
+                            $itemName,
+                            $category,
+                            $price,
+                            $get('item_description') !== '' ? $get('item_description') : null,
+                            $get('image_url') !== '' ? $get('image_url') : null,
+                            $this->parseBool($get('item_is_active'), true) ? 1 : 0,
+                            $this->parseBool($get('item_is_sold_out'), false) ? 1 : 0,
+                            (int)($get('item_sort_order') !== '' ? $get('item_sort_order') : 100),
+                        ]);
+                    $itemId = (int)$pdo->lastInsertId();
+                    $stats['items_created']++;
+                }
+                if ($itemId > 0) $touchedItemIds[$itemId] = true;
+                continue;
+            }
+
+            if ($type === 'modifier') {
+                if ($itemId <= 0) {
+                    $pdo->prepare('INSERT INTO menu_items(name,category,price,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+                        ->execute([$itemName, $category, 0, 1, 0, 100]);
+                    $itemId = (int)$pdo->lastInsertId();
+                }
+
+                $groupName = $get('group_name');
+                $groupMode = strtolower($get('group_selection_mode')) === 'multi' ? 'multi' : 'single';
+                $groupRequired = $this->parseBool($get('group_is_required'), false) ? 1 : 0;
+                if ($groupName === '') {
+                    $errors[] = 'Строка ' . $lineNo . ': для modifier нужен group_name';
+                    $stats['errors']++;
+                    continue;
+                }
+
+                $stmtGroup = $pdo->prepare('SELECT id FROM menu_item_modifier_groups WHERE menu_item_id=? AND name=? LIMIT 1');
+                $stmtGroup->execute([$itemId, $groupName]);
+                $groupId = (int)$stmtGroup->fetchColumn();
+                if ($groupId <= 0) {
+                    $pdo->prepare('INSERT INTO menu_item_modifier_groups(menu_item_id,name,selection_mode,is_required,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,1,?,NOW(),NOW())')
+                        ->execute([$itemId, $groupName, $groupMode, $groupRequired, (int)($get('group_sort_order') !== '' ? $get('group_sort_order') : 100)]);
+                    $groupId = (int)$pdo->lastInsertId();
+                    $stats['groups_created']++;
+                }
+
+                $modifierName = $get('modifier_name');
+                if ($modifierName === '') {
+                    $errors[] = 'Строка ' . $lineNo . ': для modifier нужен modifier_name';
+                    $stats['errors']++;
+                    continue;
+                }
+                $stmtMod = $pdo->prepare('SELECT id FROM menu_item_modifiers WHERE group_id=? AND name=? LIMIT 1');
+                $stmtMod->execute([$groupId, $modifierName]);
+                $modifierId = (int)$stmtMod->fetchColumn();
+
+                $priceDelta = $get('modifier_price_delta') !== '' ? $this->normalizeFloat($get('modifier_price_delta')) : 0;
+                $payload = [
+                    $priceDelta,
+                    $this->parseBool($get('modifier_is_active'), true) ? 1 : 0,
+                    $this->parseBool($get('modifier_is_sold_out'), false) ? 1 : 0,
+                    (int)($get('modifier_sort_order') !== '' ? $get('modifier_sort_order') : 100),
+                ];
+
+                if ($modifierId > 0) {
+                    $pdo->prepare('UPDATE menu_item_modifiers SET price_delta=?, is_active=?, is_sold_out=?, sort_order=?, updated_at=NOW() WHERE id=?')
+                        ->execute([...$payload, $modifierId]);
+                    $stats['modifiers_updated']++;
+                } else {
+                    $pdo->prepare('INSERT INTO menu_item_modifiers(group_id,name,price_delta,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+                        ->execute([$groupId, $modifierName, ...$payload]);
+                    $modifierId = (int)$pdo->lastInsertId();
+                    $stats['modifiers_created']++;
+                }
+
+                if ($itemId > 0) $touchedItemIds[$itemId] = true;
+                if ($modifierId > 0) $touchedModifierIds[$modifierId] = true;
+            }
+        }
+
+        fclose($fh);
+
+        if ($replaceMode && $deactivateMissingItems && !empty($touchedItemIds)) {
+            $in = implode(',', array_fill(0, count($touchedItemIds), '?'));
+            $pdo->prepare('UPDATE menu_items SET is_active=0, updated_at=NOW() WHERE id NOT IN (' . $in . ')')->execute(array_keys($touchedItemIds));
+        }
+        if ($replaceMode && $deactivateMissingModifiers && !empty($touchedModifierIds)) {
+            $in = implode(',', array_fill(0, count($touchedModifierIds), '?'));
+            $pdo->prepare('UPDATE menu_item_modifiers SET is_active=0, updated_at=NOW() WHERE id NOT IN (' . $in . ')')->execute(array_keys($touchedModifierIds));
+        }
+
+        if ($stats['errors'] > 0) {
+            $pdo->rollBack();
+            throw new \RuntimeException('Импорт прерван: ' . implode('; ', array_slice($errors, 0, 8)));
+        }
+
+        if ($dryRun) {
+            $pdo->rollBack();
+        } else {
+            $pdo->commit();
+        }
+
+        Audit::log((int)Auth::user()['id'], 'menu_import', 'menu', null, 'ok', json_encode([
+            'dry_run' => $dryRun,
+            'replace_mode' => $replaceMode,
+            'stats' => $stats,
+        ], JSON_UNESCAPED_UNICODE));
+    }
+
+    private function detectCsvDelimiter(string $sample): string {
+        $delimiters = [';', ',', "\t"];
+        $best = ';';
+        $bestCount = -1;
+        foreach ($delimiters as $delimiter) {
+            $count = substr_count($sample, $delimiter);
+            if ($count > $bestCount) {
+                $best = $delimiter;
+                $bestCount = $count;
+            }
+        }
+        return $best;
+    }
+
+    private function parseBool(string $value, bool $default = false): bool {
+        if ($value === '') return $default;
+        $v = mb_strtolower(trim($value));
+        return in_array($v, ['1', 'true', 'yes', 'y', 'да', 'on'], true);
+    }
+
+    private function normalizeFloat(string $value): float {
+        $normalized = str_replace([' ', ','], ['', '.'], trim($value));
+        return (float)$normalized;
+    }
+
+    public function exports(): void {
+        Auth::requireRole(['manager', 'admin']);
+        if (!empty($_GET['type'])) {
+            $type = $_GET['type'];
+            if ($type === 'orders') {
+                $rows = Db::pdo()->query('SELECT id,user_id,staff_user_id,total_amount,status,idempotency_key,created_at FROM orders ORDER BY id DESC LIMIT 10000')->fetchAll();
+                CsvExport::output('orders.csv', array_keys($rows[0] ?? ['id']), $rows);
+            }
+            if ($type === 'operations') {
+                $rows = Db::pdo()->query("SELECT 'cashback' t,id,user_id,order_id,type,amount,created_at FROM cashback_ledger UNION ALL SELECT 'stamp' t,id,user_id,order_id,reason,delta,created_at FROM stamp_ledger ORDER BY created_at DESC LIMIT 10000")->fetchAll();
+                CsvExport::output('operations.csv', array_keys($rows[0] ?? ['t']), $rows);
+            }
+            if ($type === 'users') {
+                $rows = Db::pdo()->query('SELECT id,phone,role,ref_code,birthday,created_at FROM users ORDER BY id DESC LIMIT 10000')->fetchAll();
+                CsvExport::output('users.csv', array_keys($rows[0] ?? ['id']), $rows);
+            }
+        }
+
+        $report = [
+            'cashback_earned' => Db::pdo()->query("SELECT COALESCE(SUM(amount),0) FROM cashback_ledger WHERE type='earn' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+            'rewards_used' => Db::pdo()->query("SELECT COUNT(*) FROM rewards WHERE status='redeemed' AND redeemed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+            'active_users' => Db::pdo()->query("SELECT COUNT(DISTINCT user_id) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(),
+        ];
+
+        view('admin/exports', ['report' => $report]);
+    }
+
+    public function audit(): void {
+        Auth::requireRole(['admin']);
+        $rows = Db::pdo()->query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')->fetchAll();
+        view('admin/audit', ['rows' => $rows]);
+    }
+
+    private function listTables(): array {
+        $rows = Db::pdo()->query('SHOW TABLES')->fetchAll(PDO::FETCH_NUM);
+        $tables = array_map(fn($r) => (string)$r[0], $rows);
+        return array_values(array_filter($tables, fn($t) => !in_array($t, ['otp_requests'], true)));
+    }
+
+    private function assertAllowedTable(string $table, array $tables): void {
+        if (!in_array($table, $tables, true)) {
+            http_response_code(400);
+            exit('Invalid table');
+        }
+    }
+}
