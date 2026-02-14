@@ -28,7 +28,7 @@
     <a class="btn" href="/admin/missions">Миссии</a>
     <a class="btn" href="/admin/menu">Меню</a>
     <a class="btn" href="/admin/push">Уведомления</a>
-    <a class="btn" href="/admin/data">Data manager</a>
+    <a class="btn" href="/admin/data">Менеджер данных</a>
     <a class="btn" href="/admin/exports">Отчёты</a>
     <a class="btn" href="/admin/audit">Аудит</a>
   </div>

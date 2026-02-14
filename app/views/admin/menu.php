@@ -27,7 +27,7 @@
           <td style="padding:6px;border-bottom:1px dashed #f0d56f"><?= (int)$i['is_active'] ? 'активна' : 'выключена' ?><?php if((int)$i['is_sold_out']===1): ?> · стоп-лист<?php endif; ?></td>
           <td style="padding:6px;border-bottom:1px dashed #f0d56f;white-space:nowrap">
             <form method="post" style="display:inline">
-              <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="toggle"><input type="hidden" name="item_id" value="<?= (int)$i['id'] ?>"><button class="btn ghost" type="submit">On/Off</button>
+              <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="toggle"><input type="hidden" name="item_id" value="<?= (int)$i['id'] ?>"><button class="btn ghost" type="submit">Вкл/Выкл</button>
             </form>
             <form method="post" style="display:inline">
               <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="sold_out"><input type="hidden" name="item_id" value="<?= (int)$i['id'] ?>"><button class="btn ghost" type="submit">Стоп</button>
@@ -65,9 +65,9 @@
     <?php foreach (($groups ?? []) as $g): ?>
       <div class="favorites-summary" style="margin-bottom:8px">
         <strong>#<?= (int)$g['id'] ?> · <?= htmlspecialchars((string)$g['name']) ?></strong>
-        <div class="muted">Товар #<?= (int)$g['menu_item_id'] ?> · <?= htmlspecialchars((string)$g['selection_mode']) ?><?= (int)$g['is_required']===1?' · обязателен':'' ?><?= (int)$g['is_active']===1?' · активен':' · выключен' ?></div>
+        <div class="muted">Товар #<?= (int)$g['menu_item_id'] ?> · <?= (string)$g['selection_mode']==='multi' ? 'несколько' : 'один' ?><?= (int)$g['is_required']===1?' · обязателен':'' ?><?= (int)$g['is_active']===1?' · активен':' · выключен' ?></div>
         <form method="post" style="display:inline">
-          <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="mod_group_toggle"><input type="hidden" name="group_id" value="<?= (int)$g['id'] ?>"><button class="btn ghost" type="submit">On/Off</button>
+          <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="mod_group_toggle"><input type="hidden" name="group_id" value="<?= (int)$g['id'] ?>"><button class="btn ghost" type="submit">Вкл/Выкл</button>
         </form>
         <form method="post" style="display:inline" onsubmit="return confirm('Удалить группу и её модификаторы?')">
           <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="mod_group_delete"><input type="hidden" name="group_id" value="<?= (int)$g['id'] ?>"><button class="btn ghost" type="submit">Удалить</button>
@@ -99,7 +99,7 @@
         <strong>#<?= (int)$m['id'] ?> · <?= htmlspecialchars((string)$m['name']) ?></strong>
         <div class="muted">Группа #<?= (int)$m['group_id'] ?> · +<?= number_format((float)$m['price_delta'],2,'.',' ') ?> ₽<?= (int)$m['is_sold_out']===1?' · стоп-лист':'' ?><?= (int)$m['is_active']===1?' · активен':' · выключен' ?></div>
         <form method="post" style="display:inline">
-          <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="mod_toggle"><input type="hidden" name="modifier_id" value="<?= (int)$m['id'] ?>"><button class="btn ghost" type="submit">On/Off</button>
+          <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="mod_toggle"><input type="hidden" name="modifier_id" value="<?= (int)$m['id'] ?>"><button class="btn ghost" type="submit">Вкл/Выкл</button>
         </form>
         <form method="post" style="display:inline">
           <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>"><input type="hidden" name="action" value="mod_sold_out"><input type="hidden" name="modifier_id" value="<?= (int)$m['id'] ?>"><button class="btn ghost" type="submit">Стоп</button>

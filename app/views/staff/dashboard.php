@@ -1,4 +1,4 @@
-<h2>Staff Dashboard</h2>
+<h2>Панель персонала</h2>
 <div class="card">
   <a href="/staff/user/search">Поиск пользователя</a><br>
   <a href="/staff/scan">Скан QR</a><br>

@@ -725,7 +725,7 @@ function initStaffLiveOrders() {
         <div class="row" style="justify-content:space-between;align-items:center">
           <strong>${Number(item.amount || 0).toFixed(2)} ₽</strong>
           <select data-live-status>
-            ${['created','accepted','preparing','ready','done','cancelled'].map((s) => `<option value="${s}" ${s===item.status?'selected':''}>${s}</option>`).join('')}
+            ${[{v:'created',l:'создан'},{v:'accepted',l:'принят'},{v:'preparing',l:'готовится'},{v:'ready',l:'готов'},{v:'done',l:'выдан'},{v:'cancelled',l:'отменён'}].map((x) => `<option value="${x.v}" ${x.v===item.status?'selected':''}>${x.l}</option>`).join('')}
           </select>
         </div>
       </article>`;
@@ -749,7 +749,7 @@ function initStaffLiveOrders() {
       const hasNew = Array.from(nextIds).some((id) => !knownIds.has(id));
       if (hasNew && knownIds.size > 0) beep();
       knownIds = nextIds;
-      status.textContent = `Онлайн · ${new Date().toLocaleTimeString()}`;
+      status.textContent = `Обновлено · ${new Date().toLocaleTimeString()}`;
       render(items);
     } catch {
       status.textContent = 'Нет соединения';
@@ -846,6 +846,22 @@ async function initProfileNotifications() {
 }
 
 
+
+function initHomeHighlights() {
+  const tip = document.getElementById('homeTip');
+  if (!tip) return;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Доброе утро' : (hour < 18 ? 'Добрый день' : 'Добрый вечер');
+  const tips = [
+    'Попробуйте лаки-позицию дня в меню — она отмечена специальной рамкой.',
+    'Добавляйте модификаторы: сиропы, альтернативное молоко и шот эспрессо.',
+    'Соберите 6 штампов — получите награду от кофейни.',
+    'Оплачивайте часть заказа кэшбэком и экономьте каждый день.'
+  ];
+  const idx = Math.floor((Date.now() / 60000) % tips.length);
+  tip.textContent = `${greeting}! ${tips[idx]}`;
+}
+
 async function initCameraScan() {
   const video = document.getElementById('scanVideo');
   const tokenInput = document.getElementById('scanToken');
@@ -884,6 +900,7 @@ async function initCameraScan() {
 
 initAnimations();
 initBottomNavActive();
+initHomeHighlights();
 showInAppFeed();
 initCopyButtons();
 initMenuFavorites();

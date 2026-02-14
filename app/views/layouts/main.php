@@ -19,14 +19,14 @@
   <a href="/menu">Меню</a>
   <?php if ($u): ?>
     <a href="/profile">Кабинет</a>
-    <?php if (in_array($u['role'], ['barista','manager','admin'], true)): ?><a href="/staff">Staff</a><?php endif; ?>
+    <?php if (in_array($u['role'], ['barista','manager','admin'], true)): ?><a href="/staff">Персонал</a><?php endif; ?>
     <?php if (in_array($u['role'], ['manager','admin'], true)): ?><a href="/admin">Админка</a><?php endif; ?>
     <a href="/logout">Выход</a>
   <?php else: ?>
     <a href="/auth">Вход</a>
   <?php endif; ?>
 </nav>
-<button id="installBtn" class="install-btn" hidden>Установить Kapouch App</button>
+<button id="installBtn" class="install-btn" hidden>Установить приложение</button>
 <script>window.CSRF_TOKEN='<?= Csrf::token() ?>';window.APP_BASE='<?= htmlspecialchars(rtrim((string)config('app.base_url',''), '/')) ?>';</script>
 <script src="/assets/js/app.js"></script>
 </body>
