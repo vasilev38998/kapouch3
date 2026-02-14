@@ -347,7 +347,8 @@ class AdminController {
         $pdo = Db::pdo();
 
         if (method_is('GET') && (string)($_GET['download_template'] ?? '') === '1') {
-            $this->downloadMenuImportTemplate();
+            $template = (string)($_GET['template'] ?? 'full');
+            $this->downloadMenuImportTemplate($template);
         }
 
         if (method_is('POST')) {
@@ -412,7 +413,13 @@ class AdminController {
                 if (!isset($_FILES['menu_import']) || !is_uploaded_file((string)($_FILES['menu_import']['tmp_name'] ?? ''))) {
                     exit('Файл не загружен');
                 }
-                $this->importMenuFromCsv((string)$_FILES['menu_import']['tmp_name']);
+                $importOptions = [
+                    'dry_run' => isset($_POST['dry_run']),
+                    'replace_mode' => isset($_POST['replace_mode']),
+                    'deactivate_missing_items' => isset($_POST['deactivate_missing_items']),
+                    'deactivate_missing_modifiers' => isset($_POST['deactivate_missing_modifiers']),
+                ];
+                $this->importMenuFromCsv((string)$_FILES['menu_import']['tmp_name'], $importOptions);
                 redirect('/admin/menu');
             }
 
@@ -437,18 +444,29 @@ class AdminController {
     }
 
 
-    private function downloadMenuImportTemplate(): never {
-        $rows = [
-            ['row_type','item_name','category','item_price','item_description','image_url','item_is_active','item_is_sold_out','item_sort_order','group_name','group_selection_mode','group_is_required','group_sort_order','modifier_name','modifier_price_delta','modifier_is_active','modifier_is_sold_out','modifier_sort_order'],
-            ['item','Капучино','Напитки','189.00','Классический капучино 300 мл','https://example.com/cappuccino.jpg','1','0','100','','','','','','','','',''],
-            ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Ваниль','30.00','1','0','10'],
-            ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Карамель','30.00','1','0','20'],
-            ['modifier','Капучино','Напитки','','','','','','','Молоко','single','1','20','Кокосовое','45.00','1','0','10'],
-            ['modifier','Капучино','Напитки','','','','','','','Экстра шот','multi','0','30','Доп. шот эспрессо','60.00','1','0','10'],
-        ];
+    private function downloadMenuImportTemplate(string $template = 'full'): never {
+        $template = strtolower(trim($template));
+        $rows = [];
+        if ($template === 'items') {
+            $rows = [
+                ['row_type','item_name','category','item_price','item_description','image_url','item_is_active','item_is_sold_out','item_sort_order'],
+                ['item','Капучино','Напитки','189.00','Классический капучино 300 мл','https://example.com/cappuccino.jpg','1','0','100'],
+                ['item','Латте','Напитки','219.00','Нежный латте 350 мл','https://example.com/latte.jpg','1','0','110'],
+            ];
+        } else {
+            $rows = [
+                ['row_type','item_name','category','item_price','item_description','image_url','item_is_active','item_is_sold_out','item_sort_order','group_name','group_selection_mode','group_is_required','group_sort_order','modifier_name','modifier_price_delta','modifier_is_active','modifier_is_sold_out','modifier_sort_order'],
+                ['item','Капучино','Напитки','189.00','Классический капучино 300 мл','https://example.com/cappuccino.jpg','1','0','100','','','','','','','','',''],
+                ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Ваниль','30.00','1','0','10'],
+                ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Карамель','30.00','1','0','20'],
+                ['modifier','Капучино','Напитки','','','','','','','Молоко','single','1','20','Кокосовое','45.00','1','0','10'],
+                ['modifier','Капучино','Напитки','','','','','','','Экстра шот','multi','0','30','Доп. шот эспрессо','60.00','1','0','10'],
+            ];
+        }
 
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="menu_import_template.csv"');
+        $filename = $template === 'items' ? 'menu_items_template.csv' : 'menu_import_template.csv';
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
         $out = fopen('php://output', 'wb');
         foreach ($rows as $row) {
             fputcsv($out, $row, ';');
@@ -457,20 +475,40 @@ class AdminController {
         exit;
     }
 
-    private function importMenuFromCsv(string $filePath): void {
+    private function importMenuFromCsv(string $filePath, array $options = []): void {
+        $dryRun = (bool)($options['dry_run'] ?? false);
+        $replaceMode = (bool)($options['replace_mode'] ?? false);
+        $deactivateMissingItems = (bool)($options['deactivate_missing_items'] ?? false);
+        $deactivateMissingModifiers = (bool)($options['deactivate_missing_modifiers'] ?? false);
+
+        if (filesize($filePath) > 5 * 1024 * 1024) {
+            throw new \RuntimeException('Файл слишком большой: максимум 5 МБ');
+        }
+
         $fh = fopen($filePath, 'rb');
         if (!$fh) {
             throw new \RuntimeException('Не удалось открыть файл импорта');
         }
 
-        $header = fgetcsv($fh, 0, ';');
+        $sample = fgets($fh);
+        if ($sample === false) {
+            fclose($fh);
+            throw new \RuntimeException('Файл импорта пуст');
+        }
+        $delimiter = $this->detectCsvDelimiter($sample);
+        rewind($fh);
+
+        $header = fgetcsv($fh, 0, $delimiter);
         if (!$header) {
             fclose($fh);
             throw new \RuntimeException('Файл импорта пуст');
         }
         $header = array_map(static fn($v): string => trim((string)$v), $header);
+        if (isset($header[0])) {
+            $header[0] = ltrim($header[0], "\xEF\xBB\xBF");
+        }
 
-        $required = ['row_type','item_name','category','group_name','group_selection_mode','group_is_required','modifier_name'];
+        $required = ['row_type','item_name','category'];
         foreach ($required as $col) {
             if (!in_array($col, $header, true)) {
                 fclose($fh);
@@ -480,35 +518,68 @@ class AdminController {
 
         $idx = array_flip($header);
         $pdo = Db::pdo();
+        $stats = [
+            'rows_total' => 0,
+            'items_created' => 0,
+            'items_updated' => 0,
+            'groups_created' => 0,
+            'modifiers_created' => 0,
+            'modifiers_updated' => 0,
+            'errors' => 0,
+        ];
+        $errors = [];
+        $touchedItemIds = [];
+        $touchedModifierIds = [];
 
-        while (($row = fgetcsv($fh, 0, ';')) !== false) {
+        $pdo->beginTransaction();
+        $lineNo = 1;
+
+        while (($row = fgetcsv($fh, 0, $delimiter)) !== false) {
+            $lineNo++;
             if (!$row || count(array_filter($row, static fn($v) => trim((string)$v) !== '')) === 0) continue;
+            $stats['rows_total']++;
             $get = static function(string $key) use ($row, $idx): string {
                 return trim((string)($row[$idx[$key]] ?? ''));
             };
 
             $type = strtolower($get('row_type'));
+            if ($type !== 'item' && $type !== 'modifier') {
+                $errors[] = 'Строка ' . $lineNo . ': неизвестный row_type (' . $type . ')';
+                $stats['errors']++;
+                continue;
+            }
             $itemName = $get('item_name');
             $category = $get('category') !== '' ? $get('category') : 'Напитки';
-            if ($itemName === '') continue;
+            if ($itemName === '') {
+                $errors[] = 'Строка ' . $lineNo . ': пустой item_name';
+                $stats['errors']++;
+                continue;
+            }
 
             $stmtItem = $pdo->prepare('SELECT id FROM menu_items WHERE name=? AND category=? LIMIT 1');
             $stmtItem->execute([$itemName, $category]);
             $itemId = (int)$stmtItem->fetchColumn();
 
             if ($type === 'item') {
-                $price = (float)($get('item_price') !== '' ? $get('item_price') : 0);
+                $priceRaw = $get('item_price');
+                $price = $priceRaw !== '' ? $this->normalizeFloat($priceRaw) : 0;
+                if ($price < 0) {
+                    $errors[] = 'Строка ' . $lineNo . ': цена товара не может быть отрицательной';
+                    $stats['errors']++;
+                    continue;
+                }
                 if ($itemId > 0) {
                     $pdo->prepare('UPDATE menu_items SET price=?, description=?, image_url=?, is_active=?, is_sold_out=?, sort_order=?, updated_at=NOW() WHERE id=?')
                         ->execute([
                             $price,
                             $get('item_description') !== '' ? $get('item_description') : null,
                             $get('image_url') !== '' ? $get('image_url') : null,
-                            $get('item_is_active') === '0' ? 0 : 1,
-                            $get('item_is_sold_out') === '1' ? 1 : 0,
+                            $this->parseBool($get('item_is_active'), true) ? 1 : 0,
+                            $this->parseBool($get('item_is_sold_out'), false) ? 1 : 0,
                             (int)($get('item_sort_order') !== '' ? $get('item_sort_order') : 100),
                             $itemId,
                         ]);
+                    $stats['items_updated']++;
                 } else {
                     $pdo->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
                         ->execute([
@@ -517,12 +588,14 @@ class AdminController {
                             $price,
                             $get('item_description') !== '' ? $get('item_description') : null,
                             $get('image_url') !== '' ? $get('image_url') : null,
-                            $get('item_is_active') === '0' ? 0 : 1,
-                            $get('item_is_sold_out') === '1' ? 1 : 0,
+                            $this->parseBool($get('item_is_active'), true) ? 1 : 0,
+                            $this->parseBool($get('item_is_sold_out'), false) ? 1 : 0,
                             (int)($get('item_sort_order') !== '' ? $get('item_sort_order') : 100),
                         ]);
                     $itemId = (int)$pdo->lastInsertId();
+                    $stats['items_created']++;
                 }
+                if ($itemId > 0) $touchedItemIds[$itemId] = true;
                 continue;
             }
 
@@ -535,8 +608,12 @@ class AdminController {
 
                 $groupName = $get('group_name');
                 $groupMode = strtolower($get('group_selection_mode')) === 'multi' ? 'multi' : 'single';
-                $groupRequired = $get('group_is_required') === '1' ? 1 : 0;
-                if ($groupName === '') continue;
+                $groupRequired = $this->parseBool($get('group_is_required'), false) ? 1 : 0;
+                if ($groupName === '') {
+                    $errors[] = 'Строка ' . $lineNo . ': для modifier нужен group_name';
+                    $stats['errors']++;
+                    continue;
+                }
 
                 $stmtGroup = $pdo->prepare('SELECT id FROM menu_item_modifier_groups WHERE menu_item_id=? AND name=? LIMIT 1');
                 $stmtGroup->execute([$itemId, $groupName]);
@@ -545,32 +622,95 @@ class AdminController {
                     $pdo->prepare('INSERT INTO menu_item_modifier_groups(menu_item_id,name,selection_mode,is_required,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,1,?,NOW(),NOW())')
                         ->execute([$itemId, $groupName, $groupMode, $groupRequired, (int)($get('group_sort_order') !== '' ? $get('group_sort_order') : 100)]);
                     $groupId = (int)$pdo->lastInsertId();
+                    $stats['groups_created']++;
                 }
 
                 $modifierName = $get('modifier_name');
-                if ($modifierName === '') continue;
+                if ($modifierName === '') {
+                    $errors[] = 'Строка ' . $lineNo . ': для modifier нужен modifier_name';
+                    $stats['errors']++;
+                    continue;
+                }
                 $stmtMod = $pdo->prepare('SELECT id FROM menu_item_modifiers WHERE group_id=? AND name=? LIMIT 1');
                 $stmtMod->execute([$groupId, $modifierName]);
                 $modifierId = (int)$stmtMod->fetchColumn();
 
+                $priceDelta = $get('modifier_price_delta') !== '' ? $this->normalizeFloat($get('modifier_price_delta')) : 0;
                 $payload = [
-                    (float)($get('modifier_price_delta') !== '' ? $get('modifier_price_delta') : 0),
-                    $get('modifier_is_active') === '0' ? 0 : 1,
-                    $get('modifier_is_sold_out') === '1' ? 1 : 0,
+                    $priceDelta,
+                    $this->parseBool($get('modifier_is_active'), true) ? 1 : 0,
+                    $this->parseBool($get('modifier_is_sold_out'), false) ? 1 : 0,
                     (int)($get('modifier_sort_order') !== '' ? $get('modifier_sort_order') : 100),
                 ];
 
                 if ($modifierId > 0) {
                     $pdo->prepare('UPDATE menu_item_modifiers SET price_delta=?, is_active=?, is_sold_out=?, sort_order=?, updated_at=NOW() WHERE id=?')
                         ->execute([...$payload, $modifierId]);
+                    $stats['modifiers_updated']++;
                 } else {
                     $pdo->prepare('INSERT INTO menu_item_modifiers(group_id,name,price_delta,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
                         ->execute([$groupId, $modifierName, ...$payload]);
+                    $modifierId = (int)$pdo->lastInsertId();
+                    $stats['modifiers_created']++;
                 }
+
+                if ($itemId > 0) $touchedItemIds[$itemId] = true;
+                if ($modifierId > 0) $touchedModifierIds[$modifierId] = true;
             }
         }
 
         fclose($fh);
+
+        if ($replaceMode && $deactivateMissingItems && !empty($touchedItemIds)) {
+            $in = implode(',', array_fill(0, count($touchedItemIds), '?'));
+            $pdo->prepare('UPDATE menu_items SET is_active=0, updated_at=NOW() WHERE id NOT IN (' . $in . ')')->execute(array_keys($touchedItemIds));
+        }
+        if ($replaceMode && $deactivateMissingModifiers && !empty($touchedModifierIds)) {
+            $in = implode(',', array_fill(0, count($touchedModifierIds), '?'));
+            $pdo->prepare('UPDATE menu_item_modifiers SET is_active=0, updated_at=NOW() WHERE id NOT IN (' . $in . ')')->execute(array_keys($touchedModifierIds));
+        }
+
+        if ($stats['errors'] > 0) {
+            $pdo->rollBack();
+            throw new \RuntimeException('Импорт прерван: ' . implode('; ', array_slice($errors, 0, 8)));
+        }
+
+        if ($dryRun) {
+            $pdo->rollBack();
+        } else {
+            $pdo->commit();
+        }
+
+        Audit::log((int)Auth::user()['id'], 'menu_import', 'menu', null, 'ok', json_encode([
+            'dry_run' => $dryRun,
+            'replace_mode' => $replaceMode,
+            'stats' => $stats,
+        ], JSON_UNESCAPED_UNICODE));
+    }
+
+    private function detectCsvDelimiter(string $sample): string {
+        $delimiters = [';', ',', "\t"];
+        $best = ';';
+        $bestCount = -1;
+        foreach ($delimiters as $delimiter) {
+            $count = substr_count($sample, $delimiter);
+            if ($count > $bestCount) {
+                $best = $delimiter;
+                $bestCount = $count;
+            }
+        }
+        return $best;
+    }
+
+    private function parseBool(string $value, bool $default = false): bool {
+        if ($value === '') return $default;
+        $v = mb_strtolower(trim($value));
+        return in_array($v, ['1', 'true', 'yes', 'y', 'да', 'on'], true);
+    }
+
+    private function normalizeFloat(string $value): float {
+        $normalized = str_replace([' ', ','], ['', '.'], trim($value));
+        return (float)$normalized;
     }
 
     public function exports(): void {

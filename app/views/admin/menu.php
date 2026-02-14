@@ -8,6 +8,7 @@
   </p>
   <p style="display:flex;gap:8px;flex-wrap:wrap">
     <a class="btn ghost" href="/admin/menu?download_template=1">Скачать шаблон CSV</a>
+    <a class="btn ghost" href="/admin/menu?download_template=1&amp;template=items">Шаблон только для товаров</a>
   </p>
   <form method="post" enctype="multipart/form-data" class="grid-2" style="margin-top:10px">
     <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
@@ -15,6 +16,10 @@
     <label>CSV-файл для импорта
       <input type="file" name="menu_import" accept=".csv,text/csv" required>
     </label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="dry_run" style="width:auto"> Тестовый запуск (без записи в БД)</label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="replace_mode" style="width:auto"> Режим синхронизации (replace)</label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="deactivate_missing_items" style="width:auto"> Выключать товары, которых нет в файле</label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="deactivate_missing_modifiers" style="width:auto"> Выключать модификаторы, которых нет в файле</label>
     <div style="display:flex;align-items:end">
       <button class="btn" type="submit">Импортировать файл</button>
     </div>
@@ -24,7 +29,10 @@
     <ul>
       <li><strong>row_type=item</strong> — создаёт/обновляет товар (по имени + категории).</li>
       <li><strong>row_type=modifier</strong> — создаёт/обновляет группу и модификатор для товара.</li>
-      <li>Обязательные колонки: <code>row_type</code>, <code>item_name</code>, <code>category</code>, <code>group_name</code>, <code>group_selection_mode</code>, <code>group_is_required</code>, <code>modifier_name</code>.</li>
+      <li>Поддерживаются разделители <code>;</code>, <code>,</code> и табуляция.</li>
+      <li>Булевы поля можно заполнять как <code>1/0</code>, <code>true/false</code>, <code>да/нет</code>.</li>
+      <li>Для цен поддерживаются форматы <code>199.50</code> и <code>199,50</code>.</li>
+      <li>Максимальный размер файла импорта: 5 МБ.</li>
     </ul>
   </details>
 </section>
