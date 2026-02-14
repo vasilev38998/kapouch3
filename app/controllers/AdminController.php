@@ -344,22 +344,67 @@ class AdminController {
 
     public function menu(): void {
         Auth::requireRole(['manager', 'admin']);
+        $pdo = Db::pdo();
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
             $action = (string)($_POST['action'] ?? 'create');
             if ($action === 'toggle') {
-                Db::pdo()->prepare('UPDATE menu_items SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
+                $pdo->prepare('UPDATE menu_items SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
                 redirect('/admin/menu');
             }
             if ($action === 'sold_out') {
-                Db::pdo()->prepare('UPDATE menu_items SET is_sold_out=IF(is_sold_out=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
+                $pdo->prepare('UPDATE menu_items SET is_sold_out=IF(is_sold_out=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['item_id']]);
                 redirect('/admin/menu');
             }
             if ($action === 'delete') {
-                Db::pdo()->prepare('DELETE FROM menu_items WHERE id=?')->execute([(int)$_POST['item_id']]);
+                $pdo->prepare('DELETE FROM menu_items WHERE id=?')->execute([(int)$_POST['item_id']]);
                 redirect('/admin/menu');
             }
-            Db::pdo()->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
+
+            if ($action === 'mod_group_create') {
+                $pdo->prepare('INSERT INTO menu_item_modifier_groups(menu_item_id,name,selection_mode,is_required,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,1,?,NOW(),NOW())')
+                    ->execute([
+                        (int)($_POST['menu_item_id'] ?? 0),
+                        trim((string)($_POST['group_name'] ?? 'Модификаторы')) ?: 'Модификаторы',
+                        (string)(($_POST['selection_mode'] ?? 'single') === 'multi' ? 'multi' : 'single'),
+                        isset($_POST['is_required']) ? 1 : 0,
+                        (int)($_POST['sort_order'] ?? 100),
+                    ]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_group_toggle') {
+                $pdo->prepare('UPDATE menu_item_modifier_groups SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['group_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_group_delete') {
+                $pdo->prepare('DELETE FROM menu_item_modifier_groups WHERE id=?')->execute([(int)$_POST['group_id']]);
+                redirect('/admin/menu');
+            }
+
+            if ($action === 'mod_create') {
+                $pdo->prepare('INSERT INTO menu_item_modifiers(group_id,name,price_delta,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,1,0,?,NOW(),NOW())')
+                    ->execute([
+                        (int)($_POST['group_id'] ?? 0),
+                        trim((string)($_POST['modifier_name'] ?? 'Опция')) ?: 'Опция',
+                        (float)($_POST['price_delta'] ?? 0),
+                        (int)($_POST['sort_order'] ?? 100),
+                    ]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_toggle') {
+                $pdo->prepare('UPDATE menu_item_modifiers SET is_active=IF(is_active=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['modifier_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_sold_out') {
+                $pdo->prepare('UPDATE menu_item_modifiers SET is_sold_out=IF(is_sold_out=1,0,1), updated_at=NOW() WHERE id=?')->execute([(int)$_POST['modifier_id']]);
+                redirect('/admin/menu');
+            }
+            if ($action === 'mod_delete') {
+                $pdo->prepare('DELETE FROM menu_item_modifiers WHERE id=?')->execute([(int)$_POST['modifier_id']]);
+                redirect('/admin/menu');
+            }
+
+            $pdo->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
                 ->execute([
                     trim((string)$_POST['name']),
                     trim((string)($_POST['category'] ?? 'Напитки')) ?: 'Напитки',
@@ -372,8 +417,11 @@ class AdminController {
                 ]);
             redirect('/admin/menu');
         }
-        $items = Db::pdo()->query('SELECT * FROM menu_items ORDER BY category ASC, sort_order ASC, id DESC')->fetchAll();
-        view('admin/menu', ['items' => $items]);
+
+        $items = $pdo->query('SELECT * FROM menu_items ORDER BY category ASC, sort_order ASC, id DESC')->fetchAll();
+        $groups = $pdo->query('SELECT * FROM menu_item_modifier_groups ORDER BY menu_item_id ASC, sort_order ASC, id ASC')->fetchAll();
+        $mods = $pdo->query('SELECT * FROM menu_item_modifiers ORDER BY group_id ASC, sort_order ASC, id ASC')->fetchAll();
+        view('admin/menu', ['items' => $items, 'groups' => $groups, 'modifiers' => $mods]);
     }
 
     public function exports(): void {

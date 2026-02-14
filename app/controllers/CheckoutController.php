@@ -40,8 +40,10 @@ class CheckoutController {
             if (!is_array($row)) continue;
             $id = (int)($row['id'] ?? 0);
             $qty = (int)($row['qty'] ?? 0);
+            $modIds = array_values(array_unique(array_map('intval', (array)($row['modifier_ids'] ?? []))));
+            sort($modIds);
             if ($id > 0 && $qty > 0) {
-                $cart[$id] = ($cart[$id] ?? 0) + min($qty, 20);
+                $cart[] = ['id' => $id, 'qty' => min($qty, 20), 'modifier_ids' => $modIds];
             }
         }
         if (!$cart) {
@@ -50,7 +52,7 @@ class CheckoutController {
             return;
         }
 
-        $ids = array_keys($cart);
+        $ids = array_values(array_unique(array_map(static fn($r): int => (int)$r['id'], $cart)));
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $stmt = Db::pdo()->prepare("SELECT id,name,price,is_active,is_sold_out FROM menu_items WHERE id IN ($placeholders)");
         $stmt->execute($ids);
@@ -62,19 +64,87 @@ class CheckoutController {
             $catalog[(int)$item['id']] = $item;
         }
 
+        $groupMap = [];
+        $modifierMap = [];
+        try {
+            $stmtG = Db::pdo()->prepare("SELECT id, menu_item_id, selection_mode, is_required FROM menu_item_modifier_groups WHERE is_active=1 AND menu_item_id IN ($placeholders)");
+            $stmtG->execute($ids);
+            foreach ($stmtG->fetchAll() ?: [] as $g) {
+                $groupMap[(int)$g['id']] = $g;
+            }
+
+            if (!empty($groupMap)) {
+                $groupIds = array_keys($groupMap);
+                $gph = implode(',', array_fill(0, count($groupIds), '?'));
+                $stmtM = Db::pdo()->prepare("SELECT id,group_id,name,price_delta,is_active,is_sold_out FROM menu_item_modifiers WHERE group_id IN ($gph)");
+                $stmtM->execute($groupIds);
+                foreach ($stmtM->fetchAll() ?: [] as $m) {
+                    $modifierMap[(int)$m['id']] = $m;
+                }
+            }
+        } catch (\Throwable) {
+            $groupMap = [];
+            $modifierMap = [];
+        }
+
         $amount = 0.0;
         $lines = [];
-        foreach ($cart as $id => $qty) {
+        foreach ($cart as $entry) {
+            $id = (int)$entry['id'];
+            $qty = (int)$entry['qty'];
             if (!isset($catalog[$id])) continue;
-            $price = (float)$catalog[$id]['price'];
-            $line = $price * $qty;
+
+            $selectedMods = [];
+            $modsByGroup = [];
+            foreach ((array)$entry['modifier_ids'] as $mid) {
+                $m = $modifierMap[(int)$mid] ?? null;
+                if (!$m) continue;
+                if ((int)($m['is_active'] ?? 1) !== 1 || (int)($m['is_sold_out'] ?? 0) === 1) {
+                    http_response_code(422);
+                    echo json_encode(['ok' => false, 'error' => 'modifier_unavailable'], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
+                $g = $groupMap[(int)$m['group_id']] ?? null;
+                if (!$g || (int)($g['menu_item_id'] ?? 0) !== $id) continue;
+                $selectedMods[] = $m;
+                $modsByGroup[(int)$m['group_id']][] = $m;
+            }
+
+            foreach ($groupMap as $g) {
+                if ((int)($g['menu_item_id'] ?? 0) !== $id) continue;
+                $gid = (int)$g['id'];
+                $picked = $modsByGroup[$gid] ?? [];
+                $required = (int)($g['is_required'] ?? 0) === 1;
+                if ($required && empty($picked)) {
+                    http_response_code(422);
+                    echo json_encode(['ok' => false, 'error' => 'modifier_required'], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
+                if ((string)($g['selection_mode'] ?? 'single') === 'single' && count($picked) > 1) {
+                    http_response_code(422);
+                    echo json_encode(['ok' => false, 'error' => 'modifier_conflict'], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
+            }
+
+            $basePrice = (float)$catalog[$id]['price'];
+            $modsPrice = 0.0;
+            $modNames = [];
+            foreach ($selectedMods as $mod) {
+                $modsPrice += (float)$mod['price_delta'];
+                $modNames[] = (string)$mod['name'];
+            }
+            $unitPrice = $basePrice + $modsPrice;
+            $line = $unitPrice * $qty;
             $amount += $line;
             $lines[] = [
                 'id' => $id,
                 'name' => (string)$catalog[$id]['name'],
                 'qty' => $qty,
-                'price' => $price,
+                'price' => $unitPrice,
                 'sum' => round($line, 2),
+                'modifier_ids' => array_map(static fn($m): int => (int)$m['id'], $selectedMods),
+                'modifiers' => $modNames,
             ];
         }
 

@@ -1,3 +1,17 @@
+<?php
+$groupsByItem = [];
+foreach (($modifierGroups ?? []) as $g) {
+  $itemId = (int)($g['menu_item_id'] ?? 0);
+  if ($itemId <= 0) continue;
+  $groupsByItem[$itemId][] = $g;
+}
+$modsByGroup = [];
+foreach (($modifiers ?? []) as $m) {
+  $groupId = (int)($m['group_id'] ?? 0);
+  if ($groupId <= 0) continue;
+  $modsByGroup[$groupId][] = $m;
+}
+?>
 <h2>Меню Kapouch</h2>
 <section class="card menu-engagement fade-in">
   <div class="kpi-row">
@@ -74,7 +88,8 @@
     <div class="card">Пока нет доступных позиций меню по выбранным фильтрам.</div>
   <?php endif; ?>
   <?php foreach ($filtered as $item): ?>
-    <article class="card menu-card" data-menu-item data-menu-id="<?= (int)$item['id'] ?>" data-menu-name="<?= htmlspecialchars((string)$item['name']) ?>" data-menu-price="<?= number_format((float)$item['price'], 2, '.', '') ?>" data-menu-category="<?= htmlspecialchars((string)$item['category']) ?>" data-menu-description="<?= htmlspecialchars((string)($item['description'] ?? '')) ?>">
+    <?php $itemId = (int)$item['id']; $itemGroups = $groupsByItem[$itemId] ?? []; ?>
+    <article class="card menu-card" data-menu-item data-menu-id="<?= $itemId ?>" data-menu-name="<?= htmlspecialchars((string)$item['name']) ?>" data-menu-price="<?= number_format((float)$item['price'], 2, '.', '') ?>" data-menu-category="<?= htmlspecialchars((string)$item['category']) ?>" data-menu-description="<?= htmlspecialchars((string)($item['description'] ?? '')) ?>">
       <?php if (!empty($item['image_url'])): ?>
         <img src="<?= htmlspecialchars((string)$item['image_url']) ?>" alt="<?= htmlspecialchars((string)$item['name']) ?>" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-bottom:8px">
       <?php endif; ?>
@@ -83,8 +98,37 @@
         <?php if ((int)($item['is_sold_out'] ?? 0) === 1): ?><span class="chip">Стоп-лист</span><?php endif; ?>
       </div>
       <h3><?= htmlspecialchars((string)$item['name']) ?></h3>
-      <div class="menu-card__price"><strong><?= number_format((float)$item['price'], 2, '.', ' ') ?> ₽</strong></div>
+      <div class="menu-card__price"><strong><?= number_format((float)$item['price'], 2, '.', ' ') ?> ₽</strong> <small class="muted" data-item-total>≈ <?= number_format((float)$item['price'], 2, '.', ' ') ?> ₽</small></div>
       <?php if (!empty($item['description'])): ?><p class="muted"><?= htmlspecialchars((string)$item['description']) ?></p><?php endif; ?>
+
+      <?php if (!empty($itemGroups)): ?>
+      <div class="modifier-groups" data-modifier-groups>
+        <?php foreach ($itemGroups as $group): ?>
+          <?php $gid = (int)$group['id']; $opts = $modsByGroup[$gid] ?? []; if (empty($opts)) continue; ?>
+          <div class="modifier-group" data-group-id="<?= $gid ?>" data-selection-mode="<?= htmlspecialchars((string)$group['selection_mode']) ?>" data-required="<?= (int)$group['is_required'] ?>">
+            <div class="modifier-group-title"><?= htmlspecialchars((string)$group['name']) ?><?= (int)$group['is_required']===1 ? ' *' : '' ?></div>
+            <div class="modifier-options">
+              <?php if ((string)$group['selection_mode'] === 'single' && (int)$group['is_required'] !== 1): ?>
+                <label class="modifier-option"><input type="radio" name="mod_group_<?= $gid ?>_<?= $itemId ?>" value="" checked style="width:auto"> Без добавки</label>
+              <?php endif; ?>
+              <?php foreach ($opts as $opt): ?>
+                <?php $oid=(int)$opt['id']; $soldOut=(int)($opt['is_sold_out']??0)===1; $price=(float)($opt['price_delta']??0); ?>
+                <label class="modifier-option <?= $soldOut?'is-unavailable':'' ?>">
+                  <?php if ((string)$group['selection_mode'] === 'multi'): ?>
+                    <input type="checkbox" data-modifier-option data-modifier-id="<?= $oid ?>" data-modifier-price="<?= number_format($price,2,'.','') ?>" <?= $soldOut?'disabled':'' ?> style="width:auto">
+                  <?php else: ?>
+                    <input type="radio" name="mod_group_<?= $gid ?>_<?= $itemId ?>" data-modifier-option data-modifier-id="<?= $oid ?>" data-modifier-price="<?= number_format($price,2,'.','') ?>" <?= ((int)$group['is_required']===1 && $oid === (int)($opts[0]['id'] ?? 0)) ? 'checked' : '' ?> <?= $soldOut?'disabled':'' ?> style="width:auto">
+                  <?php endif; ?>
+                  <span><?= htmlspecialchars((string)$opt['name']) ?><?php if ($price > 0): ?> (+<?= number_format($price,2,'.',' ') ?> ₽)<?php endif; ?><?= $soldOut?' · нет в наличии':'' ?></span>
+                </label>
+              <?php endforeach; ?>
+            </div>
+            <button type="button" class="btn ghost modifier-reset" data-modifier-reset>Сбросить</button>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
       <div class="menu-qty">
         <button type="button" class="qty-btn" data-qty-minus>−</button>
         <input type="number" min="0" max="20" step="1" value="0" data-qty-input>

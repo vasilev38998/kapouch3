@@ -275,6 +275,35 @@ CREATE TABLE IF NOT EXISTS menu_items (
   INDEX idx_menu_category(category, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+
+CREATE TABLE IF NOT EXISTS menu_item_modifier_groups (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  menu_item_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  selection_mode ENUM('single','multi') NOT NULL DEFAULT 'single',
+  is_required TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_menu_mod_group_item FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE CASCADE,
+  INDEX idx_menu_mod_group_item(menu_item_id, is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS menu_item_modifiers (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  group_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  price_delta DECIMAL(10,2) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_sold_out TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_menu_modifier_group FOREIGN KEY (group_id) REFERENCES menu_item_modifier_groups(id) ON DELETE CASCADE,
+  INDEX idx_menu_modifiers_group(group_id, is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS user_menu_favorites (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,

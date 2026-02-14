@@ -390,68 +390,189 @@ function initMenuCart() {
   const etaHint = document.getElementById('menuEtaHint');
   const shareBtn = document.getElementById('menuCartShare');
   const upsell = document.getElementById('menuUpsell');
-  const storageKey = 'menu_cart_v1';
-  const lastOrderKey = 'menu_last_paid_order_v1';
+  const storageKey = 'menu_cart_v2';
+  const lastOrderKey = 'menu_last_paid_order_v2';
   const restoreBtn = document.getElementById('menuRestoreLast');
-  const cart = new Map(Object.entries(JSON.parse(localStorage.getItem(storageKey) || '{}')).map(([k,v]) => [k, Number(v) || 0]));
+
+  const cart = new Map(Object.entries(JSON.parse(localStorage.getItem(storageKey) || '{}')).map(([k, v]) => [k, Number(v) || 0]));
+
+  const getSelectedModifiers = (card) => {
+    const selected = [];
+    card.querySelectorAll('[data-modifier-option]').forEach((input) => {
+      if (!input.disabled && input.checked && input.dataset.modifierId) {
+        selected.push({
+          id: Number(input.dataset.modifierId),
+          price: Number(input.dataset.modifierPrice || 0),
+          label: (input.parentElement?.innerText || '').trim(),
+        });
+      }
+    });
+    selected.sort((a, b) => a.id - b.id);
+    return selected;
+  };
+
+  const validateRequiredGroups = (card) => {
+    const groups = Array.from(card.querySelectorAll('[data-group-id]'));
+    for (const group of groups) {
+      if (String(group.dataset.required || '0') !== '1') continue;
+      const hasAny = Array.from(group.querySelectorAll('[data-modifier-option]')).some((i) => i.checked && !i.disabled);
+      if (!hasAny) return false;
+    }
+    return true;
+  };
+
+  const buildLineKey = (itemId, modifierIds) => `${itemId}|${modifierIds.join(',')}`;
 
   const save = () => {
     const obj = {};
-    cart.forEach((qty, id) => { if (qty > 0) obj[id] = qty; });
+    cart.forEach((qty, key) => {
+      if (qty > 0) obj[key] = qty;
+    });
     localStorage.setItem(storageKey, JSON.stringify(obj));
   };
 
+  const parseKey = (key) => {
+    const [idPart, modsPart] = String(key).split('|');
+    const id = Number(idPart || 0);
+    const modifierIds = modsPart ? modsPart.split(',').filter(Boolean).map((x) => Number(x)) : [];
+    return { id, modifierIds };
+  };
+
+  const collectSelectedModifiersPayload = (card) => getSelectedModifiers(card).map((m) => m.id);
+
+  const syncCardInputFromCurrentSelection = (card) => {
+    const itemId = Number(card.dataset.menuId || 0);
+    const selected = collectSelectedModifiersPayload(card);
+    const key = buildLineKey(itemId, selected);
+    const qty = Number(cart.get(key) || 0);
+    const input = card.querySelector('[data-qty-input]');
+    if (input) input.value = String(qty);
+
+    const basePrice = Number(card.dataset.menuPrice || 0);
+    const modsPrice = getSelectedModifiers(card).reduce((sum, m) => sum + Number(m.price || 0), 0);
+    const totalPerUnit = basePrice + modsPrice;
+    const totalEl = card.querySelector('[data-item-total]');
+    if (totalEl) totalEl.textContent = `≈ ${totalPerUnit.toFixed(2)} ₽`;
+  };
+
+  const setQtyForCardSelection = (card, qty) => {
+    const itemId = Number(card.dataset.menuId || 0);
+    const selected = collectSelectedModifiersPayload(card);
+    const key = buildLineKey(itemId, selected);
+    cart.set(key, Math.max(0, Math.min(20, Number(qty) || 0)));
+  };
+
   const render = () => {
-    let total = 0;
+    save();
     const rows = [];
-    cards.forEach((card) => {
-      const id = String(card.dataset.menuId || '');
-      const name = String(card.dataset.menuName || '');
-      const price = Number(card.dataset.menuPrice || '0');
-      const qty = Math.max(0, Math.min(20, Number(cart.get(id) || 0)));
-      cart.set(id, qty);
-      const input = card.querySelector('[data-qty-input]');
-      if (input) input.value = String(qty);
-      if (qty > 0 && price > 0) {
-        const sum = qty * price;
-        total += sum;
-        rows.push(`<div class="menu-cart-line"><span>${name} × ${qty}</span><strong>${sum.toFixed(2)} ₽</strong></div>`);
-      }
+    let total = 0;
+
+    cart.forEach((qty, key) => {
+      if (!qty || qty <= 0) return;
+      const { id, modifierIds } = parseKey(key);
+      const card = cards.find((c) => Number(c.dataset.menuId || 0) === id);
+      if (!card) return;
+      const basePrice = Number(card.dataset.menuPrice || 0);
+      const baseName = card.dataset.menuName || `#${id}`;
+
+      const modNames = [];
+      let modSumUnit = 0;
+      modifierIds.forEach((mid) => {
+        const input = card.querySelector(`[data-modifier-id="${mid}"]`);
+        if (!input) return;
+        modNames.push((input.parentElement?.innerText || '').replace(/\s+/g, ' ').trim());
+        modSumUnit += Number(input.dataset.modifierPrice || 0);
+      });
+
+      const unit = basePrice + modSumUnit;
+      const line = unit * qty;
+      total += line;
+      const modLine = modNames.length ? `<small class="muted">${modNames.join(', ')}</small>` : '';
+      rows.push(`<div class="menu-cart-line"><span>${baseName} × ${qty}<br>${modLine}</span><strong>${line.toFixed(2)} ₽</strong></div>`);
     });
 
     if (list) list.innerHTML = rows.length ? rows.join('') : '<span class="muted">Добавьте позиции из меню.</span>';
     if (totalEl) totalEl.textContent = `${total.toFixed(2)} ₽`;
 
     const spend = Math.max(0, Number(spendInput?.value || 0));
-    const payable = Math.max(0.01, total - spend);
+    const payable = Math.max(0, total - spend);
     if (spendHint) spendHint.textContent = `К оплате по СБП: ${payable.toFixed(2)} ₽`;
 
-    if (payBtn) payBtn.disabled = total <= 0;
-    save();
+    if (etaHint) {
+      const itemsCount = Array.from(cart.values()).reduce((a, b) => a + (Number(b) || 0), 0);
+      const minutes = Math.max(6, Math.min(22, 5 + itemsCount * 2));
+      etaHint.textContent = itemsCount ? `Оценка готовности: ~${minutes} мин` : 'Оценка готовности: —';
+    }
+
+    if (upsell) {
+      const hasDessert = rows.some((r) => /десерт|круассан|печенье|торт/i.test(r));
+      const hasCoffee = rows.some((r) => /кофе|капучино|латте|раф|эспрессо/i.test(r));
+      if (hasCoffee && !hasDessert) {
+        upsell.hidden = false;
+        upsell.innerHTML = '<strong>Рекомендация:</strong> Добавьте десерт к кофе — так вкуснее ☕🍰';
+      } else {
+        upsell.hidden = true;
+      }
+    }
   };
 
   cards.forEach((card) => {
-    const id = String(card.dataset.menuId || '');
-    const input = card.querySelector('[data-qty-input]');
     const plus = card.querySelector('[data-qty-plus]');
     const minus = card.querySelector('[data-qty-minus]');
+    const input = card.querySelector('[data-qty-input]');
 
     plus?.addEventListener('click', () => {
-      cart.set(id, Math.min(20, Number(cart.get(id) || 0) + 1));
+      if (!validateRequiredGroups(card)) {
+        if (status) status.textContent = 'Выберите обязательные модификаторы для этой позиции.';
+        return;
+      }
+      const curr = Number(input?.value || 0);
+      setQtyForCardSelection(card, curr + 1);
       triggerHaptic(6);
+      syncCardInputFromCurrentSelection(card);
       render();
     });
-    minus?.addEventListener('click', () => {
-      cart.set(id, Math.max(0, Number(cart.get(id) || 0) - 1));
-      triggerHaptic(6);
-      render();
-    });
-    input?.addEventListener('change', () => {
-      cart.set(id, Math.max(0, Math.min(20, Number(input.value || 0))));
-      render();
-    });
-  });
 
+    minus?.addEventListener('click', () => {
+      const curr = Number(input?.value || 0);
+      setQtyForCardSelection(card, curr - 1);
+      triggerHaptic(6);
+      syncCardInputFromCurrentSelection(card);
+      render();
+    });
+
+    input?.addEventListener('change', () => {
+      if (!validateRequiredGroups(card) && Number(input.value || 0) > 0) {
+        if (status) status.textContent = 'Выберите обязательные модификаторы для этой позиции.';
+        input.value = '0';
+      }
+      setQtyForCardSelection(card, Number(input?.value || 0));
+      syncCardInputFromCurrentSelection(card);
+      render();
+    });
+
+    card.querySelectorAll('[data-modifier-option]').forEach((el) => {
+      el.addEventListener('change', () => {
+        syncCardInputFromCurrentSelection(card);
+        render();
+      });
+    });
+
+    card.querySelectorAll('[data-modifier-reset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const group = btn.closest('[data-group-id]');
+        if (!group) return;
+        const required = String(group.dataset.required || '0') === '1';
+        const options = Array.from(group.querySelectorAll('[data-modifier-option]')).filter((i) => !i.disabled);
+        options.forEach((i) => { i.checked = false; });
+        if (required && options[0]) options[0].checked = true;
+        syncCardInputFromCurrentSelection(card);
+        render();
+      });
+    });
+
+    syncCardInputFromCurrentSelection(card);
+  });
 
   restoreBtn?.addEventListener('click', () => {
     const saved = JSON.parse(localStorage.getItem(lastOrderKey) || '{}');
@@ -459,23 +580,30 @@ function initMenuCart() {
       if (status) status.textContent = 'Нет предыдущего заказа для повторения.';
       return;
     }
-    Object.entries(saved.items).forEach(([id, qty]) => {
-      cart.set(String(id), Math.max(0, Math.min(20, Number(qty) || 0)));
+    Object.entries(saved.items).forEach(([key, qty]) => {
+      cart.set(String(key), Math.max(0, Math.min(20, Number(qty) || 0)));
     });
     if (spendInput && typeof saved.cashback_spend !== 'undefined') {
       spendInput.value = String(saved.cashback_spend);
     }
+    cards.forEach(syncCardInputFromCurrentSelection);
     if (status) status.textContent = 'Прошлая корзина восстановлена.';
     render();
   });
 
   shareBtn?.addEventListener('click', async () => {
     const lines = [];
-    cart.forEach((qty, id) => {
+    cart.forEach((qty, key) => {
       if (qty <= 0) return;
-      const card = cards.find((c) => String(c.dataset.menuId || '') === String(id));
-      const name = card?.dataset.menuName || `#${id}`;
-      lines.push(`${name} × ${qty}`);
+      const { id, modifierIds } = parseKey(key);
+      const card = cards.find((c) => Number(c.dataset.menuId || 0) === id);
+      if (!card) return;
+      const name = card.dataset.menuName || `#${id}`;
+      const modNames = modifierIds.map((mid) => {
+        const el = card.querySelector(`[data-modifier-id="${mid}"]`);
+        return (el?.parentElement?.innerText || '').trim();
+      }).filter(Boolean);
+      lines.push(`${name} × ${qty}${modNames.length ? ' (' + modNames.join(', ') + ')' : ''}`);
     });
     if (!lines.length) {
       if (status) status.textContent = 'Корзина пуста — пока нечем делиться.';
@@ -489,8 +617,13 @@ function initMenuCart() {
       if (status) status.textContent = 'Не удалось скопировать корзину.';
     }
   });
+
   clearBtn?.addEventListener('click', () => {
     cart.clear();
+    cards.forEach((card) => {
+      setQtyForCardSelection(card, 0);
+      syncCardInputFromCurrentSelection(card);
+    });
     render();
   });
 
@@ -498,8 +631,10 @@ function initMenuCart() {
 
   payBtn?.addEventListener('click', async () => {
     const items = [];
-    cart.forEach((qty, id) => {
-      if (qty > 0) items.push({ id: Number(id), qty: Number(qty) });
+    cart.forEach((qty, key) => {
+      if (qty <= 0) return;
+      const { id, modifierIds } = parseKey(key);
+      items.push({ id: Number(id), qty: Number(qty), modifier_ids: modifierIds });
     });
     if (!items.length) return;
 
@@ -526,13 +661,15 @@ function initMenuCart() {
         } else if (data?.error === 'provider_error') {
           if (status) status.textContent = data?.message ? `Т‑Банк: ${data.message}` : 'Т‑Банк отклонил инициализацию платежа.';
         } else {
-          if (status) status.textContent = 'Не удалось создать платёж. Проверьте настройки и повторите.';
+          if (status) status.textContent = data?.error === 'modifier_unavailable'
+            ? 'Один из модификаторов временно недоступен, обновите выбор.'
+            : 'Не удалось создать платёж. Проверьте настройки и повторите.';
         }
         return;
       }
       if (status) status.textContent = `К оплате: ${data.amount} ₽ (списано кэшбэка: ${data.cashback_spend || 0} ₽)`;
       const snapshot = {};
-      cart.forEach((qty, id) => { if (qty > 0) snapshot[id] = qty; });
+      cart.forEach((qty, key) => { if (qty > 0) snapshot[key] = qty; });
       localStorage.setItem(lastOrderKey, JSON.stringify({ items: snapshot, cashback_spend: Number(spendInput?.value || 0), saved_at: new Date().toISOString() }));
       window.location.href = data.payment_url;
     } catch {
