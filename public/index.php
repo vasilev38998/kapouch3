@@ -108,6 +108,7 @@ $routes = [
         '/api/notifications/read-all' => [NotificationController::class, 'readAll'],
         '/api/menu/favorites/toggle' => [MenuController::class, 'toggleFavorite'],
         '/api/checkout/sbp' => [CheckoutController::class, 'sbp'],
+        '/api/checkout/topup' => [CheckoutController::class, 'topup'],
         '/api/payments/tinkoff/notify' => [CheckoutController::class, 'tinkoffNotify'],
     ],
 ];

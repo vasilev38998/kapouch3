@@ -42,7 +42,7 @@ class ProfileController {
             $cashbackSpend = (float)($payload['cashback_spend'] ?? 0);
             $meta = ($payStatusMap[$row['status']] ?? (string)$row['status']) . ' · ' . (string)$row['external_order_id'];
             if ($cashbackSpend > 0) {
-                $meta .= ' · кэшбэк ' . number_format($cashbackSpend, 2, '.', ' ') . ' ₽';
+                $meta .= ' · списано звёздочек ' . number_format($cashbackSpend, 2, '.', ' ') . ' ★';
             }
             $history[] = [
                 'kind' => 'online_order',
@@ -55,9 +55,9 @@ class ProfileController {
 
         $cb = $pdo->prepare('SELECT id,type,amount,created_at FROM cashback_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
         $cb->execute([$user['id']]);
-        $cbTypeMap = ['earn' => 'начисление', 'spend' => 'списание', 'adjust' => 'корректировка', 'reversal' => 'реверс'];
+        $cbTypeMap = ['earn' => 'начисление звёздочек', 'spend' => 'списание звёздочек', 'adjust' => 'пополнение/корректировка', 'reversal' => 'реверс'];
         foreach ($cb->fetchAll() as $row) {
-            $history[] = ['kind' => 'cashback', 'title' => 'Кэшбэк: ' . ($cbTypeMap[$row['type']] ?? (string)$row['type']), 'value' => $row['amount'], 'meta' => 'операция #' . $row['id'], 'created_at' => $row['created_at']];
+            $history[] = ['kind' => 'cashback', 'title' => 'Баланс: ' . ($cbTypeMap[$row['type']] ?? (string)$row['type']), 'value' => number_format((float)$row['amount'], 2, '.', ' ') . ' ★', 'meta' => 'операция #' . $row['id'], 'created_at' => $row['created_at']];
         }
 
         $st = $pdo->prepare('SELECT id,delta,reason,created_at FROM stamp_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');

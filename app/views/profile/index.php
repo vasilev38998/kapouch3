@@ -4,7 +4,7 @@
 </section>
 <section class="card widget fade-in" data-reward-available="<?= (int)$loyalty['reward_available'] ?>">
   <div class="kpi-row">
-    <div><small>Баланс</small><strong><?= number_format((float)$cashback, 2, '.', ' ') ?> ₽</strong></div>
+    <div><small>Баланс звёздочек</small><strong><?= number_format((float)$cashback, 2, '.', ' ') ?> ★</strong></div>
     <div><small>Штампы</small><strong><?= (int)$loyalty['stamps'] ?>/6</strong></div>
   </div>
   <div class="stamps"><?php for($i=1;$i<=6;$i++): ?><span class="dot <?= $i <= (int)$loyalty['stamps'] ? 'filled':'' ?>"></span><?php endfor; ?></div>
@@ -15,6 +15,18 @@
     <?php if (in_array($user['role'], ['barista','manager','admin'], true)): ?><a class="btn ghost" href="/staff">Staff</a><?php endif; ?>
     <?php if (in_array($user['role'], ['manager','admin'], true)): ?><a class="btn ghost" href="/admin">Админка</a><?php endif; ?>
   </div>
+</section>
+<section class="card fade-in" id="topupCard">
+  <h3>Пополнение баланса</h3>
+  <p class="muted">Пополните баланс на любую сумму. После оплаты рубли конвертируются во внутренние звёздочки 1:1.</p>
+  <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label for="topupAmount">Сумма пополнения (₽)</label>
+      <input id="topupAmount" type="number" min="1" max="50000" step="0.01" value="300">
+    </div>
+    <button class="btn" type="button" id="topupBtn">Пополнить через СБП</button>
+  </div>
+  <small class="muted" id="topupStatus">Минимальная сумма: 1 ₽.</small>
 </section>
 <section id="inAppFeed" class="card fade-in" hidden></section>
 <section class="card fade-in">

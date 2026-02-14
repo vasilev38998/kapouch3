@@ -383,10 +383,11 @@ function initMenuCart() {
   const list = document.getElementById('menuCartList');
   const totalEl = document.getElementById('menuCartTotal');
   const payBtn = document.getElementById('menuPayBtn');
+  const payBalanceBtn = document.getElementById('menuPayBalanceBtn');
   const clearBtn = document.getElementById('menuCartClear');
   const status = document.getElementById('menuPayStatus');
-  const spendInput = document.getElementById('menuCashbackSpend');
-  const spendHint = document.getElementById('menuCashbackHint');
+  const spendInput = document.getElementById('menuStarsSpend');
+  const spendHint = document.getElementById('menuStarsHint');
   const etaHint = document.getElementById('menuEtaHint');
   const shareBtn = document.getElementById('menuCartShare');
   const upsell = document.getElementById('menuUpsell');
@@ -645,7 +646,7 @@ function initMenuCart() {
 
     try {
       const cashbackSpend = Math.max(0, Number(spendInput?.value || 0)).toFixed(2);
-      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items), cashback_spend: cashbackSpend }).toString();
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items), stars_spend: cashbackSpend }).toString();
       const res = await fetch('/api/checkout/sbp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -653,7 +654,7 @@ function initMenuCart() {
         body,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.ok || !data?.payment_url) {
+      if (!res.ok || !data?.ok || (!data?.payment_url && !data?.paid_with_balance)) {
         if (res.status === 401) {
           if (status) status.textContent = 'Для оплаты войдите в аккаунт.';
         } else if (data?.error === 'config_missing') {
@@ -667,11 +668,18 @@ function initMenuCart() {
         }
         return;
       }
-      if (status) status.textContent = `К оплате: ${data.amount} ₽ (списано кэшбэка: ${data.cashback_spend || 0} ₽)`;
+      if (status) status.textContent = `К оплате: ${data.amount} ₽ (списано звёздочек: ${data.cashback_spend || 0} ★)`;
       const snapshot = {};
       cart.forEach((qty, key) => { if (qty > 0) snapshot[key] = qty; });
       localStorage.setItem(lastOrderKey, JSON.stringify({ items: snapshot, cashback_spend: Number(spendInput?.value || 0), saved_at: new Date().toISOString() }));
-      window.location.href = data.payment_url;
+      if (data.paid_with_balance) {
+        if (status) status.textContent = `Заказ оплачен звёздочками. Начислено: ${Number(data.stars_earned || 0).toFixed(2)} ★`;
+        cart.clear();
+        render();
+        setTimeout(() => { window.location.href = data.redirect_url || '/profile'; }, 700);
+      } else {
+        window.location.href = data.payment_url;
+      }
     } catch {
       if (status) status.textContent = 'Ошибка сети при создании платежа.';
     } finally {
@@ -680,7 +688,86 @@ function initMenuCart() {
     }
   });
 
+  payBalanceBtn?.addEventListener('click', async () => {
+    const items = [];
+    cart.forEach((qty, key) => {
+      if (qty <= 0) return;
+      const { id, modifierIds } = parseKey(key);
+      items.push({ id: Number(id), qty: Number(qty), modifier_ids: modifierIds });
+    });
+    if (!items.length) return;
+
+    const spend = Math.max(0, Number(spendInput?.value || 0)).toFixed(2);
+    if (Number(spend) <= 0) {
+      if (status) status.textContent = 'Укажите сколько звёздочек списать для оплаты.';
+      return;
+    }
+
+    payBalanceBtn.disabled = true;
+    const old = payBalanceBtn.textContent;
+    payBalanceBtn.textContent = 'Проверяем баланс...';
+    try {
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items), stars_spend: spend, balance_only: '1' }).toString();
+      const res = await fetch('/api/checkout/sbp', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin', body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || !data?.paid_with_balance) {
+        if (status) status.textContent = data?.error === 'insufficient_balance'
+          ? 'Недостаточно звёздочек: пополните баланс или уменьшите списание.'
+          : 'Не удалось оплатить только звёздочками.';
+        return;
+      }
+      if (status) status.textContent = `Оплачено звёздочками. Начислено: ${Number(data.stars_earned || 0).toFixed(2)} ★`;
+      cart.clear();
+      render();
+      setTimeout(() => { window.location.href = data.redirect_url || '/profile'; }, 700);
+    } catch {
+      if (status) status.textContent = 'Ошибка сети при оплате звёздочками.';
+    } finally {
+      payBalanceBtn.disabled = false;
+      payBalanceBtn.textContent = old;
+    }
+  });
+
   render();
+}
+
+function initBalanceTopup() {
+  const topupBtn = document.getElementById('topupBtn');
+  const amountInput = document.getElementById('topupAmount');
+  const status = document.getElementById('topupStatus');
+  if (!topupBtn || !amountInput) return;
+
+  topupBtn.addEventListener('click', async () => {
+    const amount = Number(amountInput.value || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      if (status) status.textContent = 'Введите корректную сумму пополнения.';
+      return;
+    }
+    topupBtn.disabled = true;
+    const old = topupBtn.textContent;
+    topupBtn.textContent = 'Создаём платёж...';
+    if (status) status.textContent = 'Инициализация платежа на пополнение...';
+    try {
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, amount: amount.toFixed(2) }).toString();
+      const res = await fetch('/api/checkout/topup', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin', body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || !data?.payment_url) {
+        if (status) status.textContent = data?.message || 'Не удалось создать платёж на пополнение.';
+        return;
+      }
+      if (status) status.textContent = `Переходим к оплате ${Number(data.amount || 0).toFixed(2)} ₽...`;
+      window.location.href = data.payment_url;
+    } catch {
+      if (status) status.textContent = 'Ошибка сети при пополнении баланса.';
+    } finally {
+      topupBtn.disabled = false;
+      topupBtn.textContent = old;
+    }
+  });
 }
 
 
@@ -908,6 +995,7 @@ initEngagementFeatures();
 initLuckyAndRecentMenu();
 initMenuSearch();
 initMenuCart();
+initBalanceTopup();
 initAqsiSync();
 initStaffLiveOrders();
 initPhoneMask();
