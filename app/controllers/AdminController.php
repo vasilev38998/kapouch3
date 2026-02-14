@@ -345,6 +345,11 @@ class AdminController {
     public function menu(): void {
         Auth::requireRole(['manager', 'admin']);
         $pdo = Db::pdo();
+
+        if (method_is('GET') && (string)($_GET['download_template'] ?? '') === '1') {
+            $this->downloadMenuImportTemplate();
+        }
+
         if (method_is('POST')) {
             if (!Csrf::verify($_POST['_csrf'] ?? null)) exit('CSRF');
             $action = (string)($_POST['action'] ?? 'create');
@@ -403,6 +408,13 @@ class AdminController {
                 $pdo->prepare('DELETE FROM menu_item_modifiers WHERE id=?')->execute([(int)$_POST['modifier_id']]);
                 redirect('/admin/menu');
             }
+            if ($action === 'import_menu') {
+                if (!isset($_FILES['menu_import']) || !is_uploaded_file((string)($_FILES['menu_import']['tmp_name'] ?? ''))) {
+                    exit('Файл не загружен');
+                }
+                $this->importMenuFromCsv((string)$_FILES['menu_import']['tmp_name']);
+                redirect('/admin/menu');
+            }
 
             $pdo->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
                 ->execute([
@@ -422,6 +434,143 @@ class AdminController {
         $groups = $pdo->query('SELECT * FROM menu_item_modifier_groups ORDER BY menu_item_id ASC, sort_order ASC, id ASC')->fetchAll();
         $mods = $pdo->query('SELECT * FROM menu_item_modifiers ORDER BY group_id ASC, sort_order ASC, id ASC')->fetchAll();
         view('admin/menu', ['items' => $items, 'groups' => $groups, 'modifiers' => $mods]);
+    }
+
+
+    private function downloadMenuImportTemplate(): never {
+        $rows = [
+            ['row_type','item_name','category','item_price','item_description','image_url','item_is_active','item_is_sold_out','item_sort_order','group_name','group_selection_mode','group_is_required','group_sort_order','modifier_name','modifier_price_delta','modifier_is_active','modifier_is_sold_out','modifier_sort_order'],
+            ['item','Капучино','Напитки','189.00','Классический капучино 300 мл','https://example.com/cappuccino.jpg','1','0','100','','','','','','','','',''],
+            ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Ваниль','30.00','1','0','10'],
+            ['modifier','Капучино','Напитки','','','','','','','Сироп','single','0','10','Карамель','30.00','1','0','20'],
+            ['modifier','Капучино','Напитки','','','','','','','Молоко','single','1','20','Кокосовое','45.00','1','0','10'],
+            ['modifier','Капучино','Напитки','','','','','','','Экстра шот','multi','0','30','Доп. шот эспрессо','60.00','1','0','10'],
+        ];
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="menu_import_template.csv"');
+        $out = fopen('php://output', 'wb');
+        foreach ($rows as $row) {
+            fputcsv($out, $row, ';');
+        }
+        fclose($out);
+        exit;
+    }
+
+    private function importMenuFromCsv(string $filePath): void {
+        $fh = fopen($filePath, 'rb');
+        if (!$fh) {
+            throw new \RuntimeException('Не удалось открыть файл импорта');
+        }
+
+        $header = fgetcsv($fh, 0, ';');
+        if (!$header) {
+            fclose($fh);
+            throw new \RuntimeException('Файл импорта пуст');
+        }
+        $header = array_map(static fn($v): string => trim((string)$v), $header);
+
+        $required = ['row_type','item_name','category','group_name','group_selection_mode','group_is_required','modifier_name'];
+        foreach ($required as $col) {
+            if (!in_array($col, $header, true)) {
+                fclose($fh);
+                throw new \RuntimeException('Не хватает колонки: ' . $col);
+            }
+        }
+
+        $idx = array_flip($header);
+        $pdo = Db::pdo();
+
+        while (($row = fgetcsv($fh, 0, ';')) !== false) {
+            if (!$row || count(array_filter($row, static fn($v) => trim((string)$v) !== '')) === 0) continue;
+            $get = static function(string $key) use ($row, $idx): string {
+                return trim((string)($row[$idx[$key]] ?? ''));
+            };
+
+            $type = strtolower($get('row_type'));
+            $itemName = $get('item_name');
+            $category = $get('category') !== '' ? $get('category') : 'Напитки';
+            if ($itemName === '') continue;
+
+            $stmtItem = $pdo->prepare('SELECT id FROM menu_items WHERE name=? AND category=? LIMIT 1');
+            $stmtItem->execute([$itemName, $category]);
+            $itemId = (int)$stmtItem->fetchColumn();
+
+            if ($type === 'item') {
+                $price = (float)($get('item_price') !== '' ? $get('item_price') : 0);
+                if ($itemId > 0) {
+                    $pdo->prepare('UPDATE menu_items SET price=?, description=?, image_url=?, is_active=?, is_sold_out=?, sort_order=?, updated_at=NOW() WHERE id=?')
+                        ->execute([
+                            $price,
+                            $get('item_description') !== '' ? $get('item_description') : null,
+                            $get('image_url') !== '' ? $get('image_url') : null,
+                            $get('item_is_active') === '0' ? 0 : 1,
+                            $get('item_is_sold_out') === '1' ? 1 : 0,
+                            (int)($get('item_sort_order') !== '' ? $get('item_sort_order') : 100),
+                            $itemId,
+                        ]);
+                } else {
+                    $pdo->prepare('INSERT INTO menu_items(name,category,price,description,image_url,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NOW(),NOW())')
+                        ->execute([
+                            $itemName,
+                            $category,
+                            $price,
+                            $get('item_description') !== '' ? $get('item_description') : null,
+                            $get('image_url') !== '' ? $get('image_url') : null,
+                            $get('item_is_active') === '0' ? 0 : 1,
+                            $get('item_is_sold_out') === '1' ? 1 : 0,
+                            (int)($get('item_sort_order') !== '' ? $get('item_sort_order') : 100),
+                        ]);
+                    $itemId = (int)$pdo->lastInsertId();
+                }
+                continue;
+            }
+
+            if ($type === 'modifier') {
+                if ($itemId <= 0) {
+                    $pdo->prepare('INSERT INTO menu_items(name,category,price,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+                        ->execute([$itemName, $category, 0, 1, 0, 100]);
+                    $itemId = (int)$pdo->lastInsertId();
+                }
+
+                $groupName = $get('group_name');
+                $groupMode = strtolower($get('group_selection_mode')) === 'multi' ? 'multi' : 'single';
+                $groupRequired = $get('group_is_required') === '1' ? 1 : 0;
+                if ($groupName === '') continue;
+
+                $stmtGroup = $pdo->prepare('SELECT id FROM menu_item_modifier_groups WHERE menu_item_id=? AND name=? LIMIT 1');
+                $stmtGroup->execute([$itemId, $groupName]);
+                $groupId = (int)$stmtGroup->fetchColumn();
+                if ($groupId <= 0) {
+                    $pdo->prepare('INSERT INTO menu_item_modifier_groups(menu_item_id,name,selection_mode,is_required,is_active,sort_order,created_at,updated_at) VALUES(?,?,?,?,1,?,NOW(),NOW())')
+                        ->execute([$itemId, $groupName, $groupMode, $groupRequired, (int)($get('group_sort_order') !== '' ? $get('group_sort_order') : 100)]);
+                    $groupId = (int)$pdo->lastInsertId();
+                }
+
+                $modifierName = $get('modifier_name');
+                if ($modifierName === '') continue;
+                $stmtMod = $pdo->prepare('SELECT id FROM menu_item_modifiers WHERE group_id=? AND name=? LIMIT 1');
+                $stmtMod->execute([$groupId, $modifierName]);
+                $modifierId = (int)$stmtMod->fetchColumn();
+
+                $payload = [
+                    (float)($get('modifier_price_delta') !== '' ? $get('modifier_price_delta') : 0),
+                    $get('modifier_is_active') === '0' ? 0 : 1,
+                    $get('modifier_is_sold_out') === '1' ? 1 : 0,
+                    (int)($get('modifier_sort_order') !== '' ? $get('modifier_sort_order') : 100),
+                ];
+
+                if ($modifierId > 0) {
+                    $pdo->prepare('UPDATE menu_item_modifiers SET price_delta=?, is_active=?, is_sold_out=?, sort_order=?, updated_at=NOW() WHERE id=?')
+                        ->execute([...$payload, $modifierId]);
+                } else {
+                    $pdo->prepare('INSERT INTO menu_item_modifiers(group_id,name,price_delta,is_active,is_sold_out,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+                        ->execute([$groupId, $modifierName, ...$payload]);
+                }
+            }
+        }
+
+        fclose($fh);
     }
 
     public function exports(): void {

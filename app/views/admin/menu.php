@@ -1,4 +1,34 @@
 <h2>Меню кофейни</h2>
+
+<section class="card fade-in">
+  <h3>Импорт меню и модификаторов</h3>
+  <p class="muted" style="margin-top:0">
+    Загрузите CSV-файл в формате <strong>разделитель ;</strong>.
+    В одном файле можно сразу обновить товары и модификаторы.
+  </p>
+  <p style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn ghost" href="/admin/menu?download_template=1">Скачать шаблон CSV</a>
+  </p>
+  <form method="post" enctype="multipart/form-data" class="grid-2" style="margin-top:10px">
+    <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
+    <input type="hidden" name="action" value="import_menu">
+    <label>CSV-файл для импорта
+      <input type="file" name="menu_import" accept=".csv,text/csv" required>
+    </label>
+    <div style="display:flex;align-items:end">
+      <button class="btn" type="submit">Импортировать файл</button>
+    </div>
+  </form>
+  <details style="margin-top:8px">
+    <summary>Какие строки поддерживаются</summary>
+    <ul>
+      <li><strong>row_type=item</strong> — создаёт/обновляет товар (по имени + категории).</li>
+      <li><strong>row_type=modifier</strong> — создаёт/обновляет группу и модификатор для товара.</li>
+      <li>Обязательные колонки: <code>row_type</code>, <code>item_name</code>, <code>category</code>, <code>group_name</code>, <code>group_selection_mode</code>, <code>group_is_required</code>, <code>modifier_name</code>.</li>
+    </ul>
+  </details>
+</section>
+
 <form method="post" class="card fade-in">
   <input type="hidden" name="_csrf" value="<?= \App\Lib\Csrf::token() ?>">
   <input type="hidden" name="action" value="create">
