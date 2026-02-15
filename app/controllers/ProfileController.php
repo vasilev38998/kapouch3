@@ -23,6 +23,7 @@ class ProfileController {
 
         $ledger = new Ledger();
         $cashback = $ledger->cashbackBalance((int)$user['id']);
+        $realBalance = $ledger->realBalance((int)$user['id']);
 
         $history = [];
 
@@ -60,6 +61,17 @@ class ProfileController {
             $history[] = ['kind' => 'cashback', 'title' => 'Баланс: ' . ($cbTypeMap[$row['type']] ?? (string)$row['type']), 'value' => number_format((float)$row['amount'], 2, '.', ' ') . ' ★', 'meta' => 'операция #' . $row['id'], 'created_at' => $row['created_at']];
         }
 
+        try {
+            $rb = $pdo->prepare('SELECT id,type,amount,created_at FROM real_balance_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
+            $rb->execute([$user['id']]);
+            $rbTypeMap = ['topup' => 'пополнение рублёвого баланса', 'spend' => 'оплата заказа рублёвым балансом', 'adjust' => 'корректировка', 'reversal' => 'реверс'];
+            foreach ($rb->fetchAll() as $row) {
+                $history[] = ['kind' => 'real_balance', 'title' => 'Рубли: ' . ($rbTypeMap[$row['type']] ?? (string)$row['type']), 'value' => number_format((float)$row['amount'], 2, '.', ' ') . ' ₽', 'meta' => 'операция #' . $row['id'], 'created_at' => $row['created_at']];
+            }
+        } catch (\Throwable) {
+            // миграция real_balance_ledger может быть ещё не применена
+        }
+
         $st = $pdo->prepare('SELECT id,delta,reason,created_at FROM stamp_ledger WHERE user_id=? ORDER BY created_at DESC LIMIT 20');
         $st->execute([$user['id']]);
         foreach ($st->fetchAll() as $row) {
@@ -79,6 +91,7 @@ class ProfileController {
             'user' => $user,
             'loyalty' => $loyalty,
             'cashback' => $cashback,
+            'realBalance' => $realBalance,
             'history' => $history,
             'review2gis' => Settings::get('review_links.2gis_url', config('review_links.2gis_url', '')),
             'reviewYandex' => Settings::get('review_links.yandex_url', config('review_links.yandex_url', '')),

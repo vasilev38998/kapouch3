@@ -384,6 +384,7 @@ function initMenuCart() {
   const totalEl = document.getElementById('menuCartTotal');
   const payBtn = document.getElementById('menuPayBtn');
   const payBalanceBtn = document.getElementById('menuPayBalanceBtn');
+  const payRubBalanceBtn = document.getElementById('menuPayRubBalanceBtn');
   const clearBtn = document.getElementById('menuCartClear');
   const status = document.getElementById('menuPayStatus');
   const spendInput = document.getElementById('menuStarsSpend');
@@ -730,6 +731,43 @@ function initMenuCart() {
     }
   });
 
+  payRubBalanceBtn?.addEventListener('click', async () => {
+    const items = [];
+    cart.forEach((qty, key) => {
+      if (qty <= 0) return;
+      const { id, modifierIds } = parseKey(key);
+      items.push({ id: Number(id), qty: Number(qty), modifier_ids: modifierIds });
+    });
+    if (!items.length) return;
+
+    payRubBalanceBtn.disabled = true;
+    const old = payRubBalanceBtn.textContent;
+    payRubBalanceBtn.textContent = 'Списываем рублёвый баланс...';
+    try {
+      const spend = Math.max(0, Number(spendInput?.value || 0)).toFixed(2);
+      const body = new URLSearchParams({ _csrf: window.CSRF_TOKEN, items: JSON.stringify(items), stars_spend: spend, pay_with_real_balance: '1' }).toString();
+      const res = await fetch('/api/checkout/sbp', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin', body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || !data?.paid_with_real_balance) {
+        if (status) status.textContent = data?.error === 'insufficient_real_balance'
+          ? 'Недостаточно рублей на балансе. Пополните баланс в профиле.'
+          : 'Не удалось оплатить рублёвым балансом.';
+        return;
+      }
+      if (status) status.textContent = `Оплачено рублёвым балансом. Начислено звёздочек: ${Number(data.stars_earned || 0).toFixed(2)} ★`;
+      cart.clear();
+      render();
+      setTimeout(() => { window.location.href = data.redirect_url || '/profile'; }, 700);
+    } catch {
+      if (status) status.textContent = 'Ошибка сети при оплате рублёвым балансом.';
+    } finally {
+      payRubBalanceBtn.disabled = false;
+      payRubBalanceBtn.textContent = old;
+    }
+  });
+
   render();
 }
 
@@ -759,7 +797,7 @@ function initBalanceTopup() {
         if (status) status.textContent = data?.message || 'Не удалось создать платёж на пополнение.';
         return;
       }
-      if (status) status.textContent = `Переходим к оплате ${Number(data.amount || 0).toFixed(2)} ₽...`;
+      if (status) status.textContent = `Переходим к оплате ${Number(data.amount || 0).toFixed(2)} ₽ для пополнения рублёвого баланса...`;
       window.location.href = data.payment_url;
     } catch {
       if (status) status.textContent = 'Ошибка сети при пополнении баланса.';

@@ -75,6 +75,19 @@ CREATE TABLE IF NOT EXISTS cashback_ledger (
   INDEX idx_cb_order(order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS real_balance_ledger (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  type ENUM('topup','spend','adjust','reversal') NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  created_by_staff_id BIGINT UNSIGNED NULL,
+  meta_json TEXT NULL,
+  created_at DATETIME NOT NULL,
+  CONSTRAINT fk_rb_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_rb_staff FOREIGN KEY (created_by_staff_id) REFERENCES users(id),
+  INDEX idx_rb_user_created(user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS stamp_ledger (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,

@@ -158,10 +158,57 @@ class CheckoutController {
 
         $amount = round($amount, 2);
 
+        $ledger = new Ledger();
         $requestedSpend = max(0, (float)($_POST['stars_spend'] ?? ($_POST['cashback_spend'] ?? 0)));
-        $balance = (new Ledger())->cashbackBalance((int)$user['id']);
-        $cashbackSpend = round(min($requestedSpend, $amount, $balance), 2);
+        $maxSpendByRule = (new RulesEngine())->cashbackMaxSpend($amount);
+        $starsBalance = $ledger->cashbackBalance((int)$user['id']);
+        $cashbackSpend = round(min($requestedSpend, $maxSpendByRule, $amount, $starsBalance), 2);
         $payable = round(max(0, $amount - $cashbackSpend), 2);
+
+        $payWithRealBalance = isset($_POST['pay_with_real_balance']) && (string)$_POST['pay_with_real_balance'] === '1';
+        if ($payWithRealBalance) {
+            $realBalance = $ledger->realBalance((int)$user['id']);
+            if ($realBalance < $amount) {
+                http_response_code(422);
+                echo json_encode([
+                    'ok' => false,
+                    'error' => 'insufficient_real_balance',
+                    'message' => 'Недостаточно рублей на внутреннем балансе. Пополните баланс.',
+                ], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $orderId = 'rbal-' . (int)$user['id'] . '-' . date('YmdHis') . '-' . random_int(1000, 9999);
+            $payload = [
+                'cart' => $lines,
+                'amount_total' => $amount,
+                'cashback_spend' => $cashbackSpend,
+                'real_balance_spend' => $amount,
+                'amount_payable' => 0,
+                'payment_type' => 'real_balance',
+            ];
+
+            $pdo = Db::pdo();
+            $pdo->prepare('INSERT INTO payment_sessions(user_id, provider, external_order_id, amount, status, payload_json, created_at, updated_at) VALUES(?,?,?,?,?,?,NOW(),NOW())')
+                ->execute([(int)$user['id'], 'internal_balance_rub', $orderId, 0, 'accepted', json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+            $sessionId = (int)$pdo->lastInsertId();
+            $payload = $this->settleOnlineOrder($pdo, (int)$user['id'], $sessionId, $payload);
+            $pdo->prepare('UPDATE payment_sessions SET payload_json=?, updated_at=NOW() WHERE id=?')
+                ->execute([json_encode($payload, JSON_UNESCAPED_UNICODE), $sessionId]);
+
+            echo json_encode([
+                'ok' => true,
+                'paid_with_real_balance' => true,
+                'order_id' => $orderId,
+                'amount' => 0,
+                'amount_total' => $amount,
+                'real_balance_spend' => $amount,
+                'cashback_spend' => $cashbackSpend,
+                'stars_earned' => (float)($payload['stars_earned'] ?? 0),
+                'redirect_url' => '/profile',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
 
         $balanceOnly = isset($_POST['balance_only']) && (string)$_POST['balance_only'] === '1';
         if ($balanceOnly && $payable > 0) {
@@ -369,7 +416,7 @@ class CheckoutController {
             'raw' => $data,
         ];
 
-        if ($status === 'accepted' && in_array((string)$row['provider'], ['tinkoff_sbp', 'internal_balance'], true)) {
+        if ($status === 'accepted' && in_array((string)$row['provider'], ['tinkoff_sbp', 'internal_balance', 'internal_balance_rub'], true)) {
             $payload = $this->settleOnlineOrder($pdo, (int)$row['user_id'], (int)$row['id'], $payload);
         }
 
@@ -482,9 +529,13 @@ class CheckoutController {
 
         $ledger = new Ledger();
         $spend = round(max(0, (float)($payload['cashback_spend'] ?? 0)), 2);
+        $realSpend = round(max(0, (float)($payload['real_balance_spend'] ?? 0)), 2);
         $amountTotal = round(max(0, (float)($payload['amount_total'] ?? 0)), 2);
         $starsEarned = round((new RulesEngine())->calculateOrder(['total_amount' => $amountTotal])['cashback_earn'] ?? 0, 2);
 
+        if ($realSpend > 0) {
+            $ledger->addRealBalance($userId, 'spend', $realSpend, null, ['source' => 'online_order', 'payment_session_id' => $sessionId]);
+        }
         if ($spend > 0) {
             $ledger->addCashback($userId, null, 'spend', $spend, null, ['source' => 'online_order', 'payment_session_id' => $sessionId]);
         }
@@ -495,6 +546,7 @@ class CheckoutController {
         $payload['ledger_applied_at'] = date('c');
         $payload['stars_earned'] = $starsEarned;
         $payload['stars_spent'] = $spend;
+        $payload['real_balance_spent'] = $realSpend;
         return $payload;
     }
 
@@ -505,7 +557,7 @@ class CheckoutController {
 
         $amount = round(max(0, (float)($payload['topup_amount'] ?? 0)), 2);
         if ($amount > 0) {
-            (new Ledger())->addCashback($userId, null, 'adjust', $amount, null, ['source' => 'topup', 'payment_session_id' => $sessionId]);
+            (new Ledger())->addRealBalance($userId, 'topup', $amount, null, ['source' => 'topup', 'payment_session_id' => $sessionId]);
         }
 
         $payload['topup_applied_at'] = date('c');

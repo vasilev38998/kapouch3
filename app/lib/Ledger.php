@@ -88,10 +88,26 @@ class Ledger {
         return round((float)$stmt->fetchColumn(), 2);
     }
 
+    public function realBalance(int $userId): float {
+        try {
+            $stmt = Db::pdo()->prepare("SELECT COALESCE(SUM(CASE WHEN type IN ('topup','adjust') THEN amount WHEN type IN ('spend','reversal') THEN -amount ELSE 0 END),0) FROM real_balance_ledger WHERE user_id=?");
+            $stmt->execute([$userId]);
+            return round((float)$stmt->fetchColumn(), 2);
+        } catch (\Throwable) {
+            return 0.0;
+        }
+    }
+
     public function addCashback(int $userId, ?int $orderId, string $type, float $amount, ?int $staffId, array $meta = []): void {
         if ($amount <= 0) return;
         $stmt = Db::pdo()->prepare('INSERT INTO cashback_ledger(user_id, order_id, type, amount, created_by_staff_id, meta_json, created_at) VALUES(?,?,?,?,?,?,NOW())');
         $stmt->execute([$userId, $orderId, $type, $amount, $staffId, json_encode($meta, JSON_UNESCAPED_UNICODE)]);
+    }
+
+    public function addRealBalance(int $userId, string $type, float $amount, ?int $staffId = null, array $meta = []): void {
+        if ($amount <= 0) return;
+        $stmt = Db::pdo()->prepare('INSERT INTO real_balance_ledger(user_id, type, amount, created_by_staff_id, meta_json, created_at) VALUES(?,?,?,?,?,NOW())');
+        $stmt->execute([$userId, $type, $amount, $staffId, json_encode($meta, JSON_UNESCAPED_UNICODE)]);
     }
 
     public function addStamps(int $userId, ?int $orderId, int $delta, string $reason, ?int $staffId): void {

@@ -66,6 +66,7 @@ foreach (($modifiers ?? []) as $m) {
   <small class="muted" id="menuStarsHint">К оплате по СБП: 0.00 ₽</small>
   <small class="muted" id="menuEtaHint">Оценка готовности: —</small>
   <div class="row">
+    <button class="btn" type="button" id="menuPayRubBalanceBtn" data-menu-pay-rub-balance>Оплатить рублёвым балансом</button>
     <button class="btn" type="button" id="menuPayBalanceBtn" data-menu-pay-balance>Оплатить только звёздочками</button>
     <button class="btn" type="button" id="menuPayBtn" data-menu-pay>Оплатить через СБП Т‑Банк</button>
     <button class="btn ghost" type="button" id="menuCartClear">Очистить</button>

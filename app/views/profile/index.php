@@ -5,6 +5,7 @@
 <section class="card widget fade-in" data-reward-available="<?= (int)$loyalty['reward_available'] ?>">
   <div class="kpi-row">
     <div><small>Баланс звёздочек</small><strong><?= number_format((float)$cashback, 2, '.', ' ') ?> ★</strong></div>
+    <div><small>Рублёвый баланс</small><strong><?= number_format((float)($realBalance ?? 0), 2, '.', ' ') ?> ₽</strong></div>
     <div><small>Штампы</small><strong><?= (int)$loyalty['stamps'] ?>/6</strong></div>
   </div>
   <div class="stamps"><?php for($i=1;$i<=6;$i++): ?><span class="dot <?= $i <= (int)$loyalty['stamps'] ? 'filled':'' ?>"></span><?php endfor; ?></div>
@@ -18,7 +19,7 @@
 </section>
 <section class="card fade-in" id="topupCard">
   <h3>Пополнение баланса</h3>
-  <p class="muted">Пополните баланс на любую сумму. После оплаты рубли конвертируются во внутренние звёздочки 1:1.</p>
+  <p class="muted">Пополните рублёвый баланс на любую сумму. Эти рубли можно тратить на полную оплату заказа.</p>
   <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div>
       <label for="topupAmount">Сумма пополнения (₽)</label>
